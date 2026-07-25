@@ -1,0 +1,4 @@
+# Vendored copies of third-party Arduino libraries used locally for building.
+# Not committed — install them yourself (see README) so the repo doesn't carry
+# ~3 MB of someone else's source. Pin the same versions listed in the README.
+libraries/
