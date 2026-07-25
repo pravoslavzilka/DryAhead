@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
+
+:root {
+  /* Warm "dry area" theme: light red → orange → white */
+  --page-from: #fef2f2;
+  --page-via: #fff7ed;
+  --page-to: #ffffff;
+  --surface: #ffffff;
+  --ink: #1c1917;
+  --ink-secondary: #57534e;
+  --ink-muted: #8a8580;
+  --grid: #f0e7dd;
+  --baseline: #d9cfc4;
+  --accent: #ea580c;
+  --series-humidity: #2a78d6;
+  --series-temp: #c2410c;
+  --threshold-dry: #d03b3b;
+  --threshold-wet: #199e70;
+  --status-critical: #d03b3b;
+  --status-dry: #ec835a;
+  --status-ok: #0ca30c;
+  --status-wet: #2a78d6;
+}
+
+html {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+body {
+  background: linear-gradient(160deg, var(--page-from) 0%, var(--page-via) 45%, var(--page-to) 100%);
+  min-height: 100vh;
+  color: var(--ink);
+}
+
+/* ---- Leaflet marker pins ---- */
+.marker-wrap {
+  background: none;
+  border: none;
+}
+
+.marker-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 3px 10px rgba(28, 25, 23, 0.35);
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.marker-pin > span {
+  transform: rotate(45deg);
+}
+
+.marker-pin.status-ok      { background: #ea580c; }
+.marker-pin.status-dry     { background: #ec835a; }
+.marker-pin.status-critical { background: #d03b3b; animation: pulse-ring 1.6s ease-out infinite; }
+.marker-pin.status-wet     { background: #2a78d6; }
+.marker-pin.status-stale   { background: #a8a29e; }
+
+.marker-alert {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  font-size: 16px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 3px 10px rgba(28, 25, 23, 0.35), 0 0 0 0 rgba(208, 59, 59, 0.55); }
+  100% { box-shadow: 0 3px 10px rgba(28, 25, 23, 0.35), 0 0 0 14px rgba(208, 59, 59, 0); }
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+}
