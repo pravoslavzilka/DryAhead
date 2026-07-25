@@ -1,0 +1,33 @@
+name: firmware
+
+on:
+  push:
+    paths:
+      - "firmware/**"
+      - "contracts/**"
+      - ".github/workflows/firmware.yml"
+  pull_request:
+    paths:
+      - "firmware/**"
+      - "contracts/**"
+      - ".github/workflows/firmware.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      # TODO: replace with `pio run` once platformio.ini has real lib_deps pinned
+      - name: Build (placeholder)
+        run: pio run

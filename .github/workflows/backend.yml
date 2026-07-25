@@ -1,0 +1,33 @@
+name: backend
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "contracts/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "contracts/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" || pip install -e .
+
+      # TODO: replace with `pytest` once tests exist
+      - name: Lint/test (placeholder)
+        run: python -c "print('backend CI placeholder')"

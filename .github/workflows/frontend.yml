@@ -1,0 +1,33 @@
+name: frontend
+
+on:
+  push:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # TODO: once package.json exists, replace with:
+      #   run: npm ci
+      - name: Install dependencies (placeholder)
+        run: echo "no package.json yet — run 'npm create vite@latest' in frontend/ first"
+
+      # TODO: replace with `npm run build` / `npm test`
+      - name: Lint/test (placeholder)
+        run: echo "frontend CI placeholder"

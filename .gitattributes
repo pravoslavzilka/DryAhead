@@ -1,0 +1,12 @@
+# Hardware design binaries tracked with git-lfs.
+# Run `git lfs install` once before committing files matching these patterns.
+
+*.kicad_pcb filter=lfs diff=lfs merge=lfs -text
+*.kicad_sch filter=lfs diff=lfs merge=lfs -text
+*.kicad_pro filter=lfs diff=lfs merge=lfs -text
+*.kicad_mod filter=lfs diff=lfs merge=lfs -text
+*.step filter=lfs diff=lfs merge=lfs -text
+*.stp filter=lfs diff=lfs merge=lfs -text
+*.stl filter=lfs diff=lfs merge=lfs -text
+*.f3d filter=lfs diff=lfs merge=lfs -text
+*.dxf filter=lfs diff=lfs merge=lfs -text

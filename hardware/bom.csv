@@ -1,0 +1,6 @@
+reference,part,description,quantity,supplier,supplier_part_number,unit_cost,notes
+U1,LaskaKit ESP32-DevKit,ESP32 dev board,1,,,,
+U2,SX1276,LoRa transceiver module,1,,,,
+U3,DS3231,RTC module,1,,,,battery-backed
+SM1,Capacitive soil moisture sensor v2,Analog soil moisture probe,1,,,,
+BAT1,18650 Li-ion cell,Node power source,1,,,,pair with a charge/protection circuit

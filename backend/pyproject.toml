@@ -1,0 +1,19 @@
+[project]
+name = "drought-backend"
+version = "0.1.0"
+description = "Ingestion API and prediction service for the drought-platform"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "alembic",
+    "psycopg",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app"]

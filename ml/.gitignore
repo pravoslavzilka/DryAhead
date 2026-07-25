@@ -1,0 +1,3 @@
+# Raw/processed datasets and trained model weights are tracked with DVC, not git.
+data/
+models/
