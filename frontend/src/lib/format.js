@@ -31,6 +31,16 @@ export function fmtTemp(v) {
   return v == null ? '—' : `${v.toFixed(1)} °C`
 }
 
+export function fmtUptime(seconds) {
+  if (seconds == null) return '—'
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (d > 0) return `${d}d ${h}h`
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
 const MIN_PLAUSIBLE_MS = Date.UTC(2020, 0, 1)
 const CLOCK_SLACK_MS = 60 * 1000
 
