@@ -14,3 +14,8 @@ and is the API `frontend/` calls.
 
 Run locally with `just backend` (needs a Postgres instance running and reachable — no containerized
 setup yet, so start Postgres yourself for now).
+
+- **`reconciliation/`** — a standalone script (own `requirements.txt`, no shared code with the
+  FastAPI app) that finds gaps in sensor readings and queues backfill instructions for the hub.
+  Meant to run on a schedule (cron / systemd timer / serverless), independent of this service. See
+  `reconciliation/README.md`.
