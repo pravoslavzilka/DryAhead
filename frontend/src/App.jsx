@@ -6,6 +6,7 @@ import SensorModal from './components/SensorModal'
 import WeatherStrip from './components/WeatherStrip'
 import HubStatusCard from './components/HubStatusCard'
 import ReceptionActivity from './components/ReceptionActivity'
+import InstructionsWidget from './components/InstructionsWidget'
 import AboutPage from './components/AboutPage'
 import { timeAgo } from './lib/format'
 
@@ -147,6 +148,8 @@ export default function App() {
       </footer>
 
       {selected && <SensorModal sensor={selected} onClose={() => select(null)} />}
+
+      <InstructionsWidget />
     </div>
   )
 }
