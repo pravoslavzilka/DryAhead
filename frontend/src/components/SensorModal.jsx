@@ -4,7 +4,7 @@ import {
   CartesianGrid, Tooltip, ReferenceLine, Brush,
 } from 'recharts'
 import { fetchNodeHistory } from '../hooks/useSensorData'
-import { STATUS_META } from '../lib/calibration'
+import { STATUS_META, READINGS_PER_DAY } from '../lib/calibration'
 import { timeAgo, fmtDateTime, fmtTick, fmtPct, fmtTemp } from '../lib/format'
 
 const RANGES = [
@@ -44,6 +44,85 @@ function Stat({ label, value, color }) {
     <div className="rounded-xl bg-orange-50/70 px-3 py-2">
       <div className="text-[11px] text-stone-500">{label}</div>
       <div className="text-lg font-bold" style={color ? { color } : undefined}>{value}</div>
+    </div>
+  )
+}
+
+// Green -> yellow -> orange -> red, by share of the day's expected readings present.
+const COMPLETENESS_LEVELS = [
+  { min: 0.9, color: '#0ca30c', label: 'Complete' },
+  { min: 0.6, color: '#fab219', label: 'Partial' },
+  { min: 0.3, color: '#ec835a', label: 'Sparse' },
+  { min: 0, color: '#d03b3b', label: 'Minimal' },
+]
+const NO_DATA_LEVEL = { color: '#a8a29e', label: 'No data' }
+
+function completenessLevel(count, ratio) {
+  if (count === 0) return NO_DATA_LEVEL
+  return COMPLETENESS_LEVELS.find((l) => ratio >= l.min)
+}
+
+function startOfDay(ms) {
+  const d = new Date(ms)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+/** One entry per calendar day covered by the loaded range, with a read count and
+ * completeness ratio against the expected reading cadence (partial for the range's
+ * first/last day, whose coverage may be less than a full 24 h). */
+function buildDayCompleteness(data, rangeHours) {
+  const DAY_MS = 86400000
+  const now = Date.now()
+  const rangeStart = now - rangeHours * 3600 * 1000
+
+  const counts = new Map()
+  for (const p of data) {
+    const day = startOfDay(p.t)
+    counts.set(day, (counts.get(day) ?? 0) + 1)
+  }
+
+  const days = []
+  for (let d = startOfDay(rangeStart); d <= startOfDay(now); d += DAY_MS) {
+    const coverageMs = Math.max(0, Math.min(d + DAY_MS, now) - Math.max(d, rangeStart))
+    const expected = (coverageMs / DAY_MS) * READINGS_PER_DAY
+    const count = counts.get(d) ?? 0
+    days.push({ date: d, count, ratio: expected > 0 ? Math.min(1, count / expected) : 0 })
+  }
+  return days
+}
+
+function CompletenessCalendar({ data, rangeHours }) {
+  const days = buildDayCompleteness(data, rangeHours)
+  return (
+    <div>
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-stone-700">Data completeness</h3>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500">
+          {[...COMPLETENESS_LEVELS, NO_DATA_LEVEL].map((l) => (
+            <span key={l.label} className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: l.color }} />
+              {l.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {days.map(({ date, count, ratio }) => {
+          const level = completenessLevel(count, ratio)
+          const dateLabel = new Date(date).toLocaleDateString([], {
+            weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+          })
+          return (
+            <div
+              key={date}
+              title={`${dateLabel} — ${count} reading${count === 1 ? '' : 's'} (${level.label})`}
+              className="h-3.5 w-3.5 rounded-sm"
+              style={{ background: level.color }}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -265,6 +344,9 @@ export default function SensorModal({ sensor, onClose }) {
               </div>
             </div>
           )}
+
+          {/* Data completeness calendar */}
+          {data != null && <CompletenessCalendar data={data} rangeHours={rangeHours} />}
 
           {/* Calibration footer */}
           <div className="rounded-xl border border-orange-100 bg-orange-50/50 px-4 py-3 text-xs text-stone-500">

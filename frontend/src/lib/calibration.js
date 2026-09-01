@@ -28,7 +28,11 @@ export const STATUS_META = {
   unknown: { label: 'Unknown', color: '#a8a29e', badge: 'bg-stone-100 text-stone-500 border-stone-200' },
 }
 
-const STALE_AFTER_MS = 60 * 60 * 1000 // sensors report every 20 min; 3 missed cycles = stale
+const REPORT_INTERVAL_MIN = 20
+const STALE_AFTER_MS = 3 * REPORT_INTERVAL_MIN * 60 * 1000 // 3 missed cycles = stale
+
+/** Expected readings for a node in a full day, given its ~20 min report cadence. */
+export const READINGS_PER_DAY = (24 * 60) / REPORT_INTERVAL_MIN
 
 export function sensorStatus(humidity, { dryPct, wetPct }, lastSeenMs) {
   if (lastSeenMs == null || Date.now() - lastSeenMs > STALE_AFTER_MS) return 'stale'
