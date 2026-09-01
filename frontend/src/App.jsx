@@ -5,6 +5,7 @@ import SensorCard from './components/SensorCard'
 import SensorModal from './components/SensorModal'
 import WeatherStrip from './components/WeatherStrip'
 import HubStatusCard from './components/HubStatusCard'
+import ReceptionActivity from './components/ReceptionActivity'
 import AboutPage from './components/AboutPage'
 import { timeAgo } from './lib/format'
 
@@ -138,6 +139,8 @@ export default function App() {
       <WeatherStrip />
 
       <HubStatusCard />
+
+      <ReceptionActivity />
 
       <footer className="mt-4 text-center text-[11px] text-stone-400">
         Humidity calibrated per sensor: air = 0 %, water = 100 %. Alert fires at the dry-soil limit.
