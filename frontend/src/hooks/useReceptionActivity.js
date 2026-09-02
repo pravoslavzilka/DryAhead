@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, fetchAllRows } from '../lib/supabase'
 import { READINGS_PER_DAY } from '../lib/calibration'
+import { readingTime } from '../lib/format'
 
 const DAY_MS = 86400000
 
@@ -12,6 +13,12 @@ export const GRANULARITIES = [
 
 export const BUCKET_COUNT_OPTIONS = [5, 10, 20, 40]
 export const DEFAULT_BUCKET_COUNT = 10
+
+export const MODES = [
+  { key: 'received', label: 'Received' },
+  { key: 'recorded', label: 'Recorded' },
+]
+export const DEFAULT_MODE = 'received'
 
 function startOfDay(ms) {
   const d = new Date(ms)
@@ -43,8 +50,18 @@ function buildBuckets(daysPerBucket, bucketCount) {
  * Per-node reading-reception history bucketed into day/week/month periods
  * (`bucketCount` back) — a GitHub-contributions-style activity grid showing
  * how much data each node actually delivered versus its ~20 min cadence.
+ *
+ * `mode` picks which timestamp buckets are keyed on:
+ * - `'received'` (default): server insertion time. Immune to node clock
+ *   drift and never rewrites a past cell, so it's the right choice for "is
+ *   this node's link healthy" — but a backfilled resend lands entirely in
+ *   the day it was actually resent, not the days it covers.
+ * - `'recorded'`: the node's own clock (falling back to received_at when
+ *   that's implausible, via `readingTime`), so a backfill correctly fills in
+ *   the historical day it covers — useful for "does the archive have full
+ *   coverage", at the cost of past cells being able to change later.
  */
-export function useReceptionActivity(granularityKey, bucketCount = DEFAULT_BUCKET_COUNT) {
+export function useReceptionActivity(granularityKey, bucketCount = DEFAULT_BUCKET_COUNT, mode = DEFAULT_MODE) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -63,12 +80,25 @@ export function useReceptionActivity(granularityKey, bucketCount = DEFAULT_BUCKE
         .order('node_id')
       if (calErr) throw calErr
 
+      // In 'recorded' mode a backfilled row can have an old recorded_at but a
+      // recent received_at, so filtering on received_at alone would miss
+      // nothing -- but filtering on recorded_at alone would miss rows with a
+      // bogus/near-epoch recorded_at that only received_at bounds correctly.
+      // OR the two so we never under-fetch; readingTime() below picks the
+      // right field per row and out-of-range rows are simply not bucketed.
+      const cutoffRecordedSec = Math.floor(buckets[0].start / 1000)
       const readings = await fetchAllRows(() =>
-        supabase
-          .from('readings')
-          .select('node_id, received_at')
-          .gte('received_at', cutoffIso)
-          .order('received_at', { ascending: true }),
+        mode === 'recorded'
+          ? supabase
+              .from('readings')
+              .select('node_id, recorded_at, received_at')
+              .or(`recorded_at.gte.${cutoffRecordedSec},received_at.gte.${cutoffIso}`)
+              .order('received_at', { ascending: true })
+          : supabase
+              .from('readings')
+              .select('node_id, received_at')
+              .gte('received_at', cutoffIso)
+              .order('received_at', { ascending: true }),
       )
 
       const byNode = new Map(
@@ -77,7 +107,8 @@ export function useReceptionActivity(granularityKey, bucketCount = DEFAULT_BUCKE
       for (const r of readings) {
         const nodeBuckets = byNode.get(r.node_id)
         if (!nodeBuckets) continue
-        const t = Date.parse(r.received_at)
+        const t = mode === 'recorded' ? readingTime(r) : Date.parse(r.received_at)
+        if (t == null) continue
         const bucket = nodeBuckets.find((b) => t >= b.start && t < b.end)
         if (bucket) bucket.count += 1
       }
@@ -96,7 +127,7 @@ export function useReceptionActivity(granularityKey, bucketCount = DEFAULT_BUCKE
     } finally {
       setLoading(false)
     }
-  }, [granularityKey, bucketCount])
+  }, [granularityKey, bucketCount, mode])
 
   useEffect(() => {
     load()

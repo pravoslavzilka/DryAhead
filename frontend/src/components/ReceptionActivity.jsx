@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   useReceptionActivity, GRANULARITIES, BUCKET_COUNT_OPTIONS, DEFAULT_BUCKET_COUNT,
+  MODES, DEFAULT_MODE,
 } from '../hooks/useReceptionActivity'
 
 // One square is ~24px (20px on narrow screens) including its gap; the label
@@ -39,7 +40,8 @@ function bucketLabel(bucket, granularityKey) {
 export default function ReceptionActivity() {
   const [granularity, setGranularity] = useState('day')
   const [bucketCount, setBucketCount] = useState(pickDefaultBucketCount)
-  const { rows, loading, error } = useReceptionActivity(granularity, bucketCount)
+  const [mode, setMode] = useState(DEFAULT_MODE)
+  const { rows, loading, error } = useReceptionActivity(granularity, bucketCount, mode)
 
   return (
     <section className="mb-6 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
@@ -79,10 +81,32 @@ export default function ReceptionActivity() {
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-stone-500">By</span>
+            {MODES.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => setMode(m.key)}
+                title={
+                  m.key === 'recorded'
+                    ? 'When the node says it took the reading — backfilled data fills in the day it covers, but past cells can change later'
+                    : 'When the server received the reading — stable over time, but a backfill shows up on the day it was resent, not the day it covers'
+                }
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  m.key === mode
+                    ? 'bg-orange-600 text-white shadow-sm'
+                    : 'bg-orange-50 text-stone-600 hover:bg-orange-100'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <p className="mb-3 text-xs text-stone-400">
         Past {bucketCount} {GRANULARITIES.find((g) => g.key === granularity).label.toLowerCase()} · how much data each node delivered
+        {mode === 'recorded' ? ', by when it was recorded' : ', by when it arrived'}
       </p>
 
       {error && (
