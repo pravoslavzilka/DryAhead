@@ -34,7 +34,10 @@ def main() -> None:
     normalized = file_path.replace("\\", "/")
     basename = os.path.basename(normalized)
 
-    if basename == "CLAUDE.md":
+    # Explicitly user-authorized exceptions: docs, and build config with no
+    # application logic (see .claude/SETUP.md for what was authorized and
+    # when).
+    if basename in ("CLAUDE.md", "platformio.ini"):
         sys.exit(0)
 
     for prefix in PROTECTED_DIRS:
