@@ -24,4 +24,12 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-.claude
+
+# --- Claude Code ---
+# Shared config (settings.json, hooks/, skills/, agents/) is committed so
+# cloud/unattended sessions see it too. Only personal local overrides are
+# ignored.
+.claude/settings.local.json
+# Security-sensitive suggestions (specific unrotated-credential locations,
+# etc.) - this repo is public, don't index that in git history.
+.claude/SUGGESTIONS.local.md
