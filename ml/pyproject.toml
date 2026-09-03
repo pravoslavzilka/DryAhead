@@ -5,6 +5,17 @@ description = "Training code for the drought-platform forecast model"
 requires-python = ">=3.12"
 dependencies = []
 
+[project.optional-dependencies]
+# option_one: FAO-56 bucket model, calibrated per node with differential
+# evolution. See ml/option_one/README.md.
+option_one = [
+    "numpy>=1.26,<3",
+    "pandas>=2.2,<3",
+    "scipy>=1.12,<2",
+    "requests>=2.31,<3",
+    "python-dotenv>=1.0,<2",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
