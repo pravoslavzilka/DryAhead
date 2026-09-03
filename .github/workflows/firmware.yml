@@ -15,9 +15,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: firmware
+    strategy:
+      matrix:
+        # PlatformIO has no per-environment src_dir option, so each of
+        # these 3 sketches is its own self-contained PlatformIO project
+        # (see firmware/nodes/node_with_rtc/platformio.ini for why).
+        sketch:
+          - firmware/nodes/node_with_rtc
+          - firmware/nodes/node_no_rtc
+          - firmware/hub
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +34,6 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      # TODO: replace with `pio run` once platformio.ini has real lib_deps pinned
-      - name: Build (placeholder)
+      - name: Build ${{ matrix.sketch }}
+        working-directory: ${{ matrix.sketch }}
         run: pio run
