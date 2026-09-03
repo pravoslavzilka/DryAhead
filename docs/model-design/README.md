@@ -24,3 +24,14 @@ Document here, as the design solidifies:
 - Validation approach — how "is this forecast any good" will be evaluated against ground truth.
 
 This is a stub — fill in as the science gets designed.
+
+## Candidate approaches under evaluation
+
+- **Option 1** (`ml/option_one/`): a physically-based FAO-56 root-zone bucket model (rain,
+  drainage, and crop-stressed evapotranspiration simulated at daily steps), calibrated per node
+  against real sensor data with differential evolution, scored by KGE against a persistence
+  baseline. Produces an ensemble forecast (via Open-Meteo's weather ensemble) and an Available
+  Water Fraction drought index. See `ml/option_one/README.md` for the full design rationale and
+  its known limitations — notably that the live dataset as of 2026-09 is only ~2 months deep
+  (well short of the ~1 year this method assumes), so early calibration runs are data-starved and
+  should be read as a pipeline shakedown, not a validated model.

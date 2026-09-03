@@ -14,3 +14,12 @@ scientific *what and why* lives in `docs/model-design/`.
 The model consumes historical readings that `backend/` has ingested (which originated from
 `firmware/` over LoRa, per `contracts/telemetry.md`), and produces the forecast that `backend/`
 serves to `frontend/`.
+
+## Approaches
+
+Different candidate approaches live in their own top-level folders here, evaluated on their own
+merits before anything is picked as the platform's model:
+
+- **`option_one/`** -- a physically-based FAO-56 root-zone bucket model, calibrated per node
+  against real sensor readings with differential evolution (KGE-scored). No ML. See
+  `option_one/README.md`.
