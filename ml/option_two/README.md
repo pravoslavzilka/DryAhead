@@ -5,13 +5,64 @@ independent candidate approach alongside `ml/option_one/` (the FAO-56
 bucket model) -- see `ml/README.md` "Approaches". Not integrated with, and
 does not import, `option_one`'s code.
 
-## Persistence comparison -- read this first
+## Persistence and water-balance-baseline comparison -- read this first
 
-**In chronological (expanding-window) CV, the model does not beat
+**Naming note before anything else:** this repo now has two unrelated
+things both called "water balance," and they must not be conflated.
+(1) `water_balance_{window}d` is a **feature** fed into this model --
+just `rain_sum_w - et0_sum_w` over a rolling window, one input column
+among 46. (2) The **water-balance baseline** discussed in this section is
+a completely separate thing: `ml/option_one`'s full FAO-56 bucket-model
+forecaster, run standalone and compared against this model's predictions.
+Wherever this section says "water balance" without qualification, it
+means (2), the baseline model -- never the feature.
+
+**The water-balance baseline beats this gradient-boosting model at every
+horizon, clearly, on genuinely held-out data.** That is a more important
+and more humbling result than the persistence comparison below, and it's
+stated here first rather than after: if you're choosing between
+`option_one` and `option_two` today, at this data volume, `option_one`'s
+physically-based model is currently the better choice.
+
+| Horizon | Model RMSE (CV) | Persistence RMSE (CV) | Water-balance RMSE (held-out, n) | Model RMSE (LONO) | Persistence RMSE (LONO) | Water-balance RMSE (held-out, n) |
+|---|---|---|---|---|---|---|
+| h=1d  | 146.8 | 66.2  | **81.1** (n=78) | 134.8 | 116.8 | **81.1** (n=78) |
+| h=7d  | 180.7 | 141.6 | **136.6** (n=57) | 319.8 | 328.9 | **136.6** (n=57) |
+| h=14d | 394.7 | 199.6 | **157.1** (n=42) | 382.7 | 472.1 | **157.1** (n=42) |
+| h=28d | 354.3 | 96.8  | **80.4** (n=6, too thin to trust) | 330.4 | 304.7 | **80.4** (n=6, too thin to trust) |
+
+Water balance's CV and LONO numbers are identical at every horizon --
+not a copy-paste bug, verified: once restricted to `date >= held-out
+cutoff` (see next paragraph), CV's and LONO's test-row sets both reduce
+to "every row on or after that date," which is the same row population
+either way this dataset gets partitioned. `full_metrics.json` has MAE/KGE/NSE
+alongside RMSE for both.
+
+**Why "held-out" needed reconstructing, not just re-running:**
+`option_one`'s bucket-model parameters (`option_one/outputs/fitted_params.json`)
+were fit by differential evolution against the **first 70%** of each
+node's record (`option_one/config.py`'s `CALIBRATION_FRACTION`). Scoring
+those fixed parameters against rows from that same 70% would be scoring
+the model on data it was fit to reproduce -- not a real test, unlike
+persistence (fits nothing) or this model (proper CV/LONO on data it never
+trains on). `eval/baselines.water_balance_held_out_cutoff` reconstructs
+option_one's shared cutoff date (2026-08-05, cross-checked against
+`option_one/outputs/validation_report.json`'s 28 held-out days for node
+1, whose record ends 2026-09-02 -- exact match) and every number in the
+table above is restricted to dates at or after it. The unrestricted
+(in-sample-included) numbers are lower still and are in
+`full_metrics.json` as `*_water_balance_all` -- not headlined here
+because they'd overstate the comparison.
+
+**In chronological (expanding-window) CV, this model does not beat
 persistence at any horizon.** In leave-one-node-out (the harder, more
 relevant test for a new-site deployment), it beats persistence at h=7
 (RMSE 319.8 vs. 328.9 -- a marginal win) and clearly at h=14 (RMSE 382.7
-vs. 472.1), but not at h=1 or h=28.
+vs. 472.1), but not at h=1 or h=28. And at every horizon in both CV and
+LONO, it loses to the water-balance baseline above by a wide margin --
+this model doesn't just fail to clearly beat a naive rule, it's currently
+worse than a fixed physical model that has zero features and 7-9
+hand-fit parameters.
 
 | Horizon | CV rows (model / persist.) | CV: model RMSE | CV: persistence RMSE | Model beats persistence (CV)? | LONO rows | LONO: model RMSE | LONO: persistence RMSE | Model beats persistence (LONO)? |
 |---|---|---|---|---|---|---|---|---|
@@ -22,8 +73,13 @@ vs. 472.1), but not at h=1 or h=28.
 
 RMSE is in raw ADC counts (see "Why raw ADC, not calibrated theta" below;
 not a physical unit, not comparable across sensors with different
-air/water calibration endpoints without more work). Full RMSE/MAE/KGE/NSE
-for both evaluation modes at every horizon: `outputs/full_metrics.json`.
+air/water calibration endpoints without more work -- the water-balance
+baseline's predictions *are* converted to this same unit, using
+`option_one`'s own already-fitted air/water/cal_a/cal_b calibration
+purely as a unit conversion for this comparison; see
+`eval/baselines.water_balance_raw_series`'s docstring). Full
+RMSE/MAE/KGE/NSE for every comparison at every horizon:
+`outputs/full_metrics.json`.
 
 **h=28's CV number is not meaningful and shouldn't be read as a real
 comparison** -- only 2 expanding-window folds exist at that horizon
@@ -35,14 +91,17 @@ loses to persistence.
 
 **Answering the brief's specific question:** does the model beat
 persistence at h=14 and h=28? **h=14: yes under leave-one-node-out, no
-under chronological CV. h=28: no under either.** This is reported
-plainly, not spun -- per the task brief, "if it doesn't beat persistence
-at a given horizon, say so plainly in the report."
+under chronological CV. h=28: no under either.** And at both horizons it
+loses to the water-balance baseline regardless. This is reported plainly,
+not spun -- per the task brief, "if it doesn't beat persistence at a
+given horizon, say so plainly in the report."
 
 Given h=1 persistence being nearly unbeatable is expected (the brief said
 so up front) and matches what happened here, that part isn't a concern.
 The concerning part is CV losing at every horizon including h=14, where
-LONO says the model should win -- see "Why CV and LONO disagree" below.
+LONO says the model should win -- see "Why CV and LONO disagree" below --
+and losing to the water-balance baseline everywhere, which no amount of
+CV/LONO disagreement explains away.
 
 ## Effective sample size -- the number that matters more than row counts
 
@@ -281,11 +340,12 @@ feature table) land in `outputs/`, gitignored.
   `predict.py`, since nothing in the trained feature set would consume it.
   If a future iteration adds forward-looking weather features, this is the
   seam to extend.
-- No third baseline against `ml/option_one/bucket_model.py`. It exists and
-  is readable, but integrating it properly means re-running its own
-  differential-evolution calibration (a significant, stateful process with
-  its own outputs) rather than something this task could responsibly
-  bolt on read-only in the time available -- see NIGHT_SUMMARY.md.
+- ~~No third baseline against `ml/option_one/bucket_model.py`~~ -- added
+  in a follow-up pass (see "Persistence and water-balance-baseline
+  comparison" up top): reuses `option_one`'s *already-fitted*
+  `outputs/fitted_params.json` read-only rather than re-running its
+  differential-evolution calibration, so it stayed a bounded addition. The
+  result: the water-balance baseline beats this model at every horizon.
 - Raw-ADC glitch reads (0.1-9% of readings per node, outside the
   `[water, air]` calibration range) are averaged into daily means, not
   filtered -- see "Soil moisture" above.

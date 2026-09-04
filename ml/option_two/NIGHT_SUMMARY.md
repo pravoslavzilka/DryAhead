@@ -58,6 +58,40 @@ numbers and the CV-vs-LONO disagreement explanation are in README.md's
 top section, by design (not buried). h=28's chronological CV result (6
 test rows across 2 folds) is flagged as too thin to trust either way.
 
+## Follow-up: the water-balance baseline was added (2026-09-04)
+
+The brief's originally-skipped third baseline (`option_one`'s FAO-56
+bucket model) was added after the initial build, at the user's request to
+continue this task. Reused `option_one/outputs/fitted_params.json`
+read-only rather than re-running its differential-evolution calibration,
+so it stayed a bounded follow-up rather than a second multi-hour build.
+
+**Result: the water-balance baseline beats this model at every horizon,
+CV and LONO alike, by a wide margin** (e.g. h=1: 81.1 vs. this model's
+146.8 CV / 134.8 LONO; h=14: 157.1 vs. 394.7 CV / 382.7 LONO). This is a
+more important finding than the persistence comparison above and is now
+headlined first in README.md, not appended after.
+
+Getting a *fair* number required one real piece of work beyond just
+calling `bucket_model.simulate()`: option_one's parameters were fit on
+the first 70% of each node's record, so scoring them anywhere in that
+window is in-sample, not a real test. I reconstructed option_one's own
+calibration cutoff date (2026-08-05) from `CALIBRATION_FRACTION` and the
+35-day pre-buffer in its `run_pipeline.py`, cross-checked it against
+`validation_report.json`'s 28 held-out days for node 1 (exact match), and
+restricted every headlined water-balance number to dates at or after it
+(`eval/baselines.water_balance_held_out_cutoff`). The unrestricted numbers
+are lower still and live in `full_metrics.json` as `*_water_balance_all`,
+not headlined since they'd overstate the win.
+
+Also fixed along the way: converting the bucket model's `theta` output
+back to raw ADC units (to compare in the same units as this model's
+target) reuses option_one's already-fitted linear `(cal_a, cal_b)` map and
+the real hardware `air`/`water` calibration endpoints from
+`sensor_calibration` -- an inversion of an existing fit, not an invented
+calibration curve, and never written into this pipeline's own
+features/target (still raw ADC throughout, per the brief).
+
 ## Acceptance check -- self-run results
 
 1. `git diff --name-only development..HEAD` (checked immediately before
@@ -84,8 +118,37 @@ test rows across 2 folds) is flagged as too thin to trust either way.
    `.env.example`, and prose references), no literal value. Pass.
 7. This file. Pass (it's the file being checked).
 
+**Re-verified after the water-balance follow-up above:** `git diff
+--name-only development..HEAD` still entirely under `ml/option_two/`;
+`pytest` still 5/5; `git diff ... | grep -iE "supabase|anon|key|secret|password"`
+still only variable names/comments (no literal Supabase credential --
+`option_one/outputs/fitted_params.json`, the one new cross-package file
+read, is bucket-model physics parameters, not a secret).
+
 ## What I'm unsure about
 
+- **The water-balance held-out cutoff date (2026-08-05) is reconstructed,
+  not read from a stored option_one artifact** -- no run output records
+  the exact date, only the 70% fraction and the formula in
+  `run_pipeline.py`. I rebuilt it from this pipeline's own date range,
+  which should match option_one's (same underlying Supabase table) to
+  within a day, and cross-checked it against node 1's 28 held-out days in
+  `validation_report.json`, which matched exactly. Still a
+  reconstruction, not a certainty -- if `option_one`'s own data pull ever
+  differed from this pipeline's (different dedup timing, say), the cutoff
+  could be off by a day or two, which at this record length could shift
+  an n by a handful of rows.
+- **The water-balance win is stark enough to warrant a sanity check I
+  didn't have time for**: rerunning `option_one/validate.py`'s own
+  persistence comparison over the same held-out window as a
+  cross-check, to confirm option_one's reported "loses to persistence
+  everywhere" (evaluated differently -- on calibrated theta *levels*,
+  70/30 split, not raw-ADC deltas the way this comparison does it) isn't
+  in tension with the raw-ADC-delta framing beating persistence here at
+  several horizons. I believe the difference is fully explained by the
+  different target definition (level vs. delta) and units (calibrated
+  theta vs. raw ADC), not a bug in either evaluation, but I did not
+  independently re-verify option_one's own numbers to confirm.
 - **h=28's chronological-CV number is close to meaningless** (2 folds, 6
   test rows) -- a direct consequence of the deployment record being only
   ~2 months deep, not something more data engineering could fix within

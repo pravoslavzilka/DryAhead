@@ -61,6 +61,42 @@ def evaluate_horizon(table: pd.DataFrame, horizon: int) -> dict:
         persist_pred = np.zeros_like(lono_obs)
         result["lono_persistence"] = metrics.all_metrics(persist_pred, lono_obs)
         result["lono_pred"], result["lono_obs"] = lono_pred, lono_obs
+
+    # Water balance (option_one's fitted bucket model): scored on exactly
+    # the same held-out rows as the GBM/persistence numbers above, via each
+    # fold's test_dates/test_node_ids, not on the full table -- otherwise
+    # it wouldn't be a fair side-by-side comparison. Coverage can be a
+    # strict subset of n_cv/n_lono if a row's date falls outside the
+    # bucket model's weather range or a node has no fitted params; that
+    # count is reported alongside the metrics rather than silently
+    # letting a smaller n produce a misleadingly different-looking result.
+    #
+    # Reported in two forms: "all" (every row with wb coverage, whether or
+    # not that date was inside the bucket model's own calibration window)
+    # and "held_out" (restricted to dates after
+    # baselines.water_balance_held_out_cutoff -- see that function's
+    # docstring for why the unrestricted number alone would overstate the
+    # bucket model's generalization, unlike persistence/the GBM which have
+    # no such in-sample overlap). held_out is the fair one to headline.
+    if f"wb_pred_h{horizon}" in table.columns:
+        cutoff = baselines.water_balance_held_out_cutoff(table)
+        for prefix, fold_iterable in (("cv", cv_folds), ("lono", lono.values())):
+            if not fold_iterable:
+                continue
+            for suffix, min_date in (("all", None), ("held_out", cutoff)):
+                wb_pred, wb_obs = [], []
+                for f in fold_iterable:
+                    p, o = baselines.water_balance_metrics_for_fold(
+                        table, horizon, f.test_dates, f.test_node_ids, min_date=min_date)
+                    wb_pred.append(p); wb_obs.append(o)
+                wb_pred_arr = np.concatenate(wb_pred) if wb_pred else np.array([])
+                wb_obs_arr = np.concatenate(wb_obs) if wb_obs else np.array([])
+                if len(wb_obs_arr):
+                    key = f"{prefix}_water_balance" if suffix == "held_out" else f"{prefix}_water_balance_{suffix}"
+                    result[key] = metrics.all_metrics(wb_pred_arr, wb_obs_arr)
+                    result[f"{key}_n"] = len(wb_obs_arr)
+        result["water_balance_held_out_cutoff"] = cutoff
+
     return result
 
 

@@ -31,6 +31,12 @@ class FoldResult:
     n_test: int
     pred: np.ndarray
     obs: np.ndarray
+    # (date, node_id) per test row, same order as pred/obs -- lets a
+    # baseline that isn't fit per-fold (e.g. eval/baselines.py's water
+    # balance, a fixed physical simulation) be scored on the exact same
+    # held-out rows for a fair side-by-side comparison.
+    test_dates: np.ndarray = field(default_factory=lambda: np.array([]))
+    test_node_ids: np.ndarray = field(default_factory=lambda: np.array([]))
 
 
 def _prep_xy(table: pd.DataFrame, horizon: int) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
@@ -102,6 +108,8 @@ def expanding_window_cv(table: pd.DataFrame, horizon: int, min_train_days: int =
                 fold=fold_idx, train_end=cutoff, test_start=cutoff + pd.Timedelta(days=1),
                 test_end=test_end, n_train=int(n_train), n_test=int(n_test),
                 pred=pred, obs=y[test_mask].to_numpy(),
+                test_dates=rows.loc[test_mask, "date"].to_numpy(),
+                test_node_ids=rows.loc[test_mask, "node_id"].to_numpy(),
             ))
             fold_idx += 1
         cutoff = test_end
@@ -124,6 +132,8 @@ def leave_one_node_out(table: pd.DataFrame, horizon: int) -> dict[int, FoldResul
             fold=-1, train_end=pd.NaT, test_start=pd.NaT, test_end=pd.NaT,
             n_train=int(train_mask.sum()), n_test=int(test_mask.sum()),
             pred=pred, obs=y[test_mask].to_numpy(),
+            test_dates=rows.loc[test_mask, "date"].to_numpy(),
+            test_node_ids=rows.loc[test_mask, "node_id"].to_numpy(),
         )
     return out
 

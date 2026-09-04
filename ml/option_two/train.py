@@ -26,7 +26,12 @@ from eval import baselines, report
 from modeling import gbm
 
 
-def build_dataset(use_cache: bool = True) -> pd.DataFrame:
+def build_dataset(use_cache: bool = True) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
+    """Returns (feature table, per-node daily weather, calibration table).
+    The latter two are only needed by the water-balance baseline
+    (eval/baselines.add_water_balance_columns) -- returned here rather than
+    re-fetched there so both paths share exactly the same per-node
+    lat/lon/date-range logic instead of risking the two drifting apart."""
     url, key = loaders.load_credentials()
     loaders.check_access(url, key)
     moisture = loaders.load_daily_raw_moisture(url, key, use_cache=use_cache)
@@ -42,7 +47,8 @@ def build_dataset(use_cache: bool = True) -> pd.DataFrame:
         weather[node_id] = w
         elevation[node_id] = w.attrs.get("elevation")
 
-    return features.build_feature_table(moisture, weather, elevation, HORIZONS)
+    table = features.build_feature_table(moisture, weather, elevation, HORIZONS)
+    return table, weather, cal
 
 
 def _fmt_metrics(m: dict) -> str:
@@ -51,8 +57,11 @@ def _fmt_metrics(m: dict) -> str:
 
 def run(use_cache: bool = True) -> dict:
     os.makedirs(OUTPUTS_DIR, exist_ok=True)
-    table = build_dataset(use_cache=use_cache)
+    table, weather_by_node, cal = build_dataset(use_cache=use_cache)
+    table = baselines.add_water_balance_columns(table, weather_by_node, cal, HORIZONS)
     table.to_parquet(os.path.join(OUTPUTS_DIR, "feature_table.parquet"))
+
+    wb_available = baselines.water_balance_available()
 
     events = report.effective_event_count(table)
     row_counts = table.groupby("node_id").size().to_dict()
@@ -66,11 +75,18 @@ def run(use_cache: bool = True) -> dict:
                   f"-- total {sum(events.values())} events across {len(events)} nodes.\n")
     lines.append("This is the number that should calibrate how much to trust any of the numbers "
                   "below, not the row counts above.\n")
+    if not wb_available:
+        lines.append("\n_Water-balance baseline (option_one's bucket model) skipped: "
+                      "ml/option_one/bucket_model.py or its fitted_params.json isn't available._\n")
 
-    lines.append("\n## Model vs. persistence, by horizon\n")
-    lines.append("| Horizon | CV: model RMSE | CV: persistence RMSE | CV: model KGE | "
-                  "LONO: model RMSE | LONO: persistence RMSE | LONO: model KGE | Beats persistence? |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    lines.append("\n## Model vs. persistence" + (" vs. water balance" if wb_available else "") + ", by horizon\n")
+    header = ("| Horizon | CV: model RMSE | CV: persistence RMSE" +
+              (" | CV: water-balance RMSE (n)" if wb_available else "") +
+              " | CV: model KGE | LONO: model RMSE | LONO: persistence RMSE" +
+              (" | LONO: water-balance RMSE (n)" if wb_available else "") +
+              " | LONO: model KGE | Beats persistence? |")
+    lines.append(header)
+    lines.append("|---" * header.count("|") + "|")
 
     for h in HORIZONS:
         res = report.evaluate_horizon(table, h)
@@ -91,10 +107,20 @@ def run(use_cache: bool = True) -> dict:
         def fmt_kge(m):
             return f"{m['kge']:.3f}" if m else "n/a"
 
-        lines.append(
-            f"| h={h}d | {fmt_rmse(cv_m)} | {fmt_rmse(cv_p)} | {fmt_kge(cv_m)} | "
-            f"{fmt_rmse(lono_m)} | {fmt_rmse(lono_p)} | {fmt_kge(lono_m)} | {beats} |"
-        )
+        def fmt_wb(metrics_key, n_key):
+            m = res.get(metrics_key)
+            if not m:
+                return "n/a"
+            return f"{m['rmse']:.1f} (n={res.get(n_key)})"
+
+        row = f"| h={h}d | {fmt_rmse(cv_m)} | {fmt_rmse(cv_p)} |"
+        if wb_available:
+            row += f" {fmt_wb('cv_water_balance', 'cv_water_balance_n')} |"
+        row += f" {fmt_kge(cv_m)} | {fmt_rmse(lono_m)} | {fmt_rmse(lono_p)} |"
+        if wb_available:
+            row += f" {fmt_wb('lono_water_balance', 'lono_water_balance_n')} |"
+        row += f" {fmt_kge(lono_m)} | {beats} |"
+        lines.append(row)
 
         if cv_m:
             report.save_scatter_plot(res["cv_pred"], res["cv_obs"], h,
@@ -109,7 +135,29 @@ def run(use_cache: bool = True) -> dict:
                                          os.path.join(OUTPUTS_DIR, f"timeseries_h{h}.png"))
 
     print("\n".join(lines))
+    _write_full_metrics(all_results, events, row_counts)
     return {"table": table, "results": all_results, "events": events, "row_counts": row_counts, "lines": lines}
+
+
+def _write_full_metrics(all_results: dict, events: dict, row_counts: dict) -> None:
+    """outputs/full_metrics.json -- full RMSE/MAE/KGE/NSE for every
+    horizon x evaluation mode (model, persistence, water-balance
+    held-out, water-balance all-rows), referenced from README.md/
+    NIGHT_SUMMARY.md as the place to find numbers not in the summary
+    tables. Drops the raw pred/obs arrays (those are what the scatter/
+    timeseries plots are for, not this file) and stringifies the one
+    Timestamp value (water_balance_held_out_cutoff)."""
+    skip_keys = {"cv_pred", "cv_obs", "lono_pred", "lono_obs"}
+    out = {}
+    for h, res in all_results.items():
+        clean = {k: v for k, v in res.items() if k not in skip_keys}
+        if "water_balance_held_out_cutoff" in clean:
+            clean["water_balance_held_out_cutoff"] = str(clean["water_balance_held_out_cutoff"])
+        out[str(h)] = clean
+    out["_events"] = {str(k): v for k, v in events.items()}
+    out["_row_counts"] = {str(k): v for k, v in row_counts.items()}
+    with open(os.path.join(OUTPUTS_DIR, "full_metrics.json"), "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=2)
 
 
 def fit_and_save_final_models(table: pd.DataFrame) -> None:
