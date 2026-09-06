@@ -1,0 +1,93 @@
+{
+  "1": {
+    "node_id": 1,
+    "main_fit_only": true,
+    "seed": 0,
+    "kge": 0.9770710227022499,
+    "params": {
+      "wet_ref": 2400.933637577624,
+      "dry_ref": 2590.9028071530015,
+      "Kc": 0.3786759794649609,
+      "p": 0.7108025052665538,
+      "scale_mm_to_raw": 21.19335289731938
+    },
+    "n_windows": 3,
+    "et0_method": "open-meteo-hourly-penman-monteith",
+    "persistence": {
+      "3": {
+        "n_windows": 3,
+        "mae_raw": 37.333333333333336
+      },
+      "7": {
+        "n_windows": 3,
+        "mae_raw": 35.666666666666664
+      },
+      "14": {
+        "n_windows": 1,
+        "mae_raw": 214.0
+      }
+    },
+    "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md"
+  },
+  "4": {
+    "node_id": 4,
+    "main_fit_only": true,
+    "seed": 0,
+    "kge": 0.927221084035794,
+    "params": {
+      "wet_ref": 2013.9300630127275,
+      "dry_ref": 2253.4302127574947,
+      "Kc": 0.14418443805343917,
+      "p": 0.5211886983098603,
+      "scale_mm_to_raw": 29.986173726340766
+    },
+    "n_windows": 3,
+    "et0_method": "open-meteo-hourly-penman-monteith",
+    "persistence": {
+      "3": {
+        "n_windows": 3,
+        "mae_raw": 73.0
+      },
+      "7": {
+        "n_windows": 3,
+        "mae_raw": 127.0
+      },
+      "14": {
+        "n_windows": 2,
+        "mae_raw": 131.5
+      }
+    },
+    "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md"
+  },
+  "5": {
+    "node_id": 5,
+    "main_fit_only": true,
+    "seed": 0,
+    "tol": 5e-05,
+    "kge": 0.7591587728406127,
+    "params": {
+      "wet_ref": 2169.188616462641,
+      "dry_ref": 2599.342342922393,
+      "Kc": 1.4964262283655596,
+      "p": 0.8999898660508213,
+      "scale_mm_to_raw": 291.73835801262743
+    },
+    "n_windows": 4,
+    "et0_method": "open-meteo-hourly-penman-monteith",
+    "persistence": {
+      "3": {
+        "n_windows": 4,
+        "mae_raw": 241.5
+      },
+      "7": {
+        "n_windows": 4,
+        "mae_raw": 243.5
+      },
+      "14": {
+        "n_windows": 2,
+        "mae_raw": 490.0
+      }
+    },
+    "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md. Fit with tol=5e-5 (looser than the 1e-6 default) to converge in time -- see NIGHT_SUMMARY.md for why."
+  }
+}

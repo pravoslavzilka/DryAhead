@@ -105,33 +105,62 @@ All three nodes clear the "need >= 3 windows" bar -- none of them are the
 "can't be calibrated yet" case the task spec anticipated as a legitimate
 outcome.
 
-**Node 1's main joint fit was run to completion** (differential_evolution,
-default settings, 3 windows, ~3290 points total): KGE = **0.977**,
-`wet_ref=2400.9, dry_ref=2590.9, Kc=0.379, p=0.711, scale_mm_to_raw=21.19`.
-This is one seed's point estimate only -- the equifinality check (12 seeds)
-and hold-out validation have not run yet for any node.
+**All three nodes' main joint fits were run to completion**
+(`differential_evolution`, one seed each):
 
-**Not yet done, and why:** the full per-node validation (12-seed
-equifinality + hold-out, on top of the main fit) is ~14 full DE fits per
-node at ~6 minutes each once fully converged -- roughly 80-90 minutes per
-node, ~4 hours for all three. That's genuinely a job for an unattended
-`night.sh` run with its own timeout, not something to force through
-interactively. This branch is being handed back to `night.sh` with an
-extended timeout to let it actually finish; whatever it produces lands in
-`configs/nodes/node_{id}.json` and `reports/node_{id}.md` per node, with
-`reports/run_summary.json` as the machine-readable roll-up. If you're
-reading this before that run finished, check whether those files exist
-yet.
+| Node | Windows | KGE | Notes |
+|---|---|---|---|
+| 1 | 3 (8.0, 28.4, 8.2 d) | **0.977** | no parameter at a bound |
+| 4 | 3 (20.7, 11.6, 15.3 d) | **0.927** | no parameter at a bound |
+| 5 | 4 (11.7, 20.7, 13.1, 15.3 d) | **0.759** | **Kc, p, scale_mm_to_raw all at/near their upper bounds** -- see `reports/node_5.md`, this is flagged as a real problem, not accepted as a good fit |
+
+Full parameter values and persistence-benchmark tables per node are in
+`reports/node_{1,4,5}.md` and `configs/nodes/node_{1,4,5}.json`.
+`reports/run_summary.json` rolls all three up.
+
+**Not done, and why -- a platform constraint, not a scope choice:**
+Equifinality (12-seed refit) and hold-out validation were planned to run
+via a `night.sh`-launched unattended agent with an extended (280-minute)
+timeout, since a full per-node validation is ~14 DE fits at ~6 minutes
+each (~80-90 min/node, ~4h for all three) -- clearly a job for an
+unattended run, not interactive back-and-forth. That attempt correctly
+refused for an independent, valid reason (see next section). Handling it
+interactively instead, every background-launched process doing sustained
+CPU work in this session -- whether launched via `night.sh` or directly --
+was killed by the environment well before a multi-fit job could finish,
+consistently within several minutes, regardless of the declared timeout.
+Only *foreground* tool calls that completed inside their own declared
+timeout window survived reliably. That ceiling (proven safe up to ~590s)
+is enough for exactly one main fit per call, which is how nodes 1/4/5's
+main fits above were actually produced -- one at a time, foreground,
+node 5 needed a loosened `tol` (5e-5 vs. the 1e-6 default) to converge
+inside that window at all given its larger point count. Stacking 14 such
+fits per node reliably, unattended, was not achievable in this session.
+**If you have a way to run a long CPU-bound background job on this
+machine/account that survives more than a few minutes, that's the
+missing piece** -- the code itself doesn't need to change, just needs to
+actually run `validate.equifinality(window_data, n_seeds=12)` and
+`validate.holdout_validate(...)` per node, which `run_pipeline.main()`
+(now resumable, commits per node) already does correctly.
 
 ## What I'm unsure about
 
-- Only node 1 has been fit even once; nodes 4 and 5's fits, and the
-  equifinality/CV numbers for all three, don't exist yet as of this
-  commit -- see "Not yet done" above.
+- **Node 5's fit is likely not trustworthy as-is** -- three of five
+  parameters pressed against their bounds, and its KGE (0.759) is well
+  below nodes 1/4. Either the bounds (`Kc` in [0.1, 1.5],
+  `scale_mm_to_raw` in [0.1, 300.0], both unvalidated against live data
+  per the original task's own admission) are too tight for node 5's
+  actual dynamics, or its 4 windows don't jointly pin these parameters
+  down well. Needs a re-fit with widened bounds plus the equifinality
+  check before trusting these numbers.
+- Nodes 1/4's fits look good (high KGE, no bound-pressing) but are still
+  single-seed point estimates -- without equifinality's CV per parameter,
+  there's no way yet to say which of their parameters are actually
+  constrained by the data versus coincidentally landing somewhere
+  reasonable-looking.
 - The `scale_mm_to_raw` bound (0.1-300.0) is unvalidated against live data;
-  node 1's fit landed at 21.19, comfortably inside the bound, which is a
-  mild positive signal but not a substitute for checking whether the other
-  two nodes also land away from the bound edges.
+  nodes 1/4 landed well inside it (21.2, 30.0) but node 5 landed at 291.7,
+  right at the edge -- see above.
 - Whether Open-Meteo's hourly `et0_fao_evapotranspiration` was actually
   populated for these date ranges was confirmed live: `et0_method =
   open-meteo-hourly-penman-monteith` printed for node 1 (not the
