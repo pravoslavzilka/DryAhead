@@ -9,6 +9,27 @@ account after the code was actually run against live data, real bugs were
 found and fixed, and a first real calibration succeeded. `NIGHT_BLOCKED.md`
 has been removed since the blocker it described no longer applies.
 
+## NIGHT_RULES/Supabase conflict, resolved
+
+A follow-up unattended run on `night/drydown-calibration-run` correctly
+stopped and refused to invoke `run_pipeline.main()`, flagging a real
+conflict: `NIGHT_RULES.md` says, verbatim, "Never connect to Supabase or
+any production database, read or write," with no read-only carve-out,
+while this task requires exactly that (read-only anon-key access, same as
+`ml/option_two/`'s already-established, already-approved pattern). That
+was the right call for an unattended agent to make rather than silently
+picking a side. Resolved here, in an attended session, by the person who
+wrote both the original task spec (which explicitly specifies Supabase
+read access) and `NIGHT_RULES.md`: the blanket rule is meant to prevent an
+unattended agent from touching production state, not to block a read-only
+`select`-only fetch that a prior, explicitly-scoped task already
+authorized. That same run also reported the shell/PowerShell tool
+alternating between spurious approval failures and bare `Exit code 66` on
+trivial commands (`git status`, `echo hello`) -- independent of the rule
+conflict, and consistent with similar shell-reliability problems reported
+by the original option_three build and by a separate same-night IPP task.
+Worth investigating as an environment issue if it recurs.
+
 ## Directory-naming deviation (as instructed)
 
 The spec this task is drawn from describes a structure living directly

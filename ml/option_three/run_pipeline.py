@@ -117,6 +117,25 @@ def run_node(node_id: int, all_readings: pd.DataFrame, url: str, key: str) -> di
     return result
 
 
+def _commit_node(node_id: int) -> None:
+    """Commit whatever this node produced under ml/option_three/, so a
+    kill/timeout partway through the full run (each node is ~80-90 min of
+    real compute) only loses the node in progress, not everything already
+    finished. Best-effort: prints and continues on failure rather than
+    crashing the run over a git problem."""
+    import subprocess
+
+    try:
+        subprocess.run(["git", "add", "ml/option_three"], cwd=site.REPO_ROOT, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"option_three: node {node_id} calibration run"],
+            cwd=site.REPO_ROOT,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"  (commit for node {node_id} skipped/failed: {e})")
+
+
 def main():
     url, key = site.load_credentials()
     loaders.check_access(url, key)
@@ -124,14 +143,21 @@ def main():
     raw = loaders.fetch_readings_raw(url, key, site.NODE_IDS)
     prepared = clean.prepare_readings(raw, site.NODE_IDS)
 
-    results = {}
-    for node_id in site.NODE_IDS:
-        print(f"=== node {node_id} ===")
-        results[node_id] = run_node(node_id, prepared, url, key)
+    summary_path = site.OPTION_THREE_DIR / "reports" / "run_summary.json"
+    results = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
 
-    out_path = site.OPTION_THREE_DIR / "reports" / "run_summary.json"
-    out_path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
-    print(f"wrote {out_path}")
+    for node_id in site.NODE_IDS:
+        config_path = site.OPTION_THREE_DIR / "configs" / "nodes" / f"node_{node_id}.json"
+        if str(node_id) in results or config_path.exists():
+            print(f"=== node {node_id}: already done, skipping (resumable run) ===")
+            continue
+        print(f"=== node {node_id} ===")
+        results[str(node_id)] = run_node(node_id, prepared, url, key)
+        summary_path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+        print(f"wrote {summary_path} (through node {node_id})")
+        _commit_node(node_id)
+
+    print("all nodes done")
 
 
 if __name__ == "__main__":
