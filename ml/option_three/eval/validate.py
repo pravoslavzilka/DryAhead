@@ -37,10 +37,17 @@ def equifinality(windows: list[WindowData], n_seeds: int = 12) -> dict:
 def holdout_validate(windows: list[WindowData], holdout_index: int, seed: int = 0) -> dict:
     """Fits on all windows except `holdout_index`, simulates that window
     forward from its own observed start with the fitted params, reports
-    error against what was actually observed."""
+    error against what was actually observed.
+
+    Passes min_windows=2 to calibrate_node: a node with exactly 3 windows
+    (calibrate_node's own default floor) would otherwise never be
+    hold-out-validatable at all, since training on windows-minus-one from
+    3 leaves 2. This trains hold-out's fit thinner than the spec's normal
+    3-window bar -- accepted deliberately, on the user's call, rather than
+    silently working around it -- see NIGHT_SUMMARY.md."""
     train = [w for i, w in enumerate(windows) if i != holdout_index]
     held = windows[holdout_index]
-    fit = calibrate_node(train, seed=seed)
+    fit = calibrate_node(train, seed=seed, min_windows=2)
     sim = simulate_all(fit["params"], [held])
     return {
         "params": fit["params"],

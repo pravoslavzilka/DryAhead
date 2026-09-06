@@ -175,3 +175,43 @@ actually run `validate.equifinality(window_data, n_seeds=12)` and
   three real nodes without crashing or producing an obviously wrong window
   count, but its edge-case behavior on data patterns not represented in
   either the synthetic test or these three nodes is still unverified.
+
+
+## Addendum -- node 4 equifinality run (this session)
+
+Ran node 4's deferred equifinality check (12 seeds, foreground, one DE fit
+per Bash call, ~270-410s each -- the same "one fit per foreground call"
+pattern this file already documents as the only reliable way to run
+sustained CPU work here). Full detail in `reports/node_4.md`; headline:
+
+- KGE is essentially identical across all 12 seeds (mean 0.9272, std
+  5.3e-10) -- the fit itself is robust.
+- **Kc (CV 0.580) and scale_mm_to_raw (CV 0.683) are not constrained by
+  node 4's 3 windows** -- many different values fit equally well. `p`
+  (CV 0.201) is right at this pipeline's own 0.2 unconstrained threshold.
+  Only wet_ref/dry_ref (CV 0.101/0.168) are well pinned down.
+- Practical effect: node 4's single-seed main fit (Kc=0.144,
+  scale_mm_to_raw=29.99) is one of many equally-valid parameter
+  combinations, not "the" calibration. High KGE does not mean these
+  physical parameters are individually trustworthy.
+
+**New bug found, not yet fixed:** hold-out validation
+(`eval/validate.holdout_validate`) trains on all windows except one held
+out. Node 4 (and node 1) have exactly 3 windows -- this pipeline's own
+stated minimum to calibrate at all -- so holding one out leaves 2 windows,
+which `calibrate_node` refuses outright (`need at least 3 usable
+windows`). This is a structural conflict, not an edge case: **no node
+with exactly 3 windows can ever be hold-out validated as this code is
+currently written.** Node 5 (4 windows) is unaffected. **User's call: loosen it.** `calibrate_node` gained a `min_windows`
+parameter (default 3, unchanged for real calibration); `holdout_validate`
+now passes `min_windows=2` for its own internal training fit only. Ran
+node 4's hold-out with the fix: held out the 20.7-day window, trained on
+the 11.6- and 15.3-day windows. Result: **held-out KGE = -0.287, RMSE =
+140.9 raw** -- worse than node 4's own 14-day persistence baseline (131.5
+raw). The fit does not generalize to an unseen window. Combined with the
+equifinality result above, **node 4 is not recommended for drydown
+prediction as currently calibrated** -- not because of a code bug, but
+because the data doesn't constrain this model well enough yet. Node 1
+still needs the same treatment (equifinality + hold-out) before any
+prediction call can be made on it either; only node 4 was actually run
+this session.

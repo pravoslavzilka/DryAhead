@@ -31,7 +31,7 @@
   },
   "4": {
     "node_id": 4,
-    "main_fit_only": true,
+    "main_fit_only": false,
     "seed": 0,
     "kge": 0.927221084035794,
     "params": {
@@ -57,7 +57,46 @@
         "mae_raw": 131.5
       }
     },
-    "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md"
+    "note": "equifinality (12 seeds): KGE robust, but Kc/scale_mm_to_raw not data-constrained (CV 0.58/0.68). Hold-out: fails outright (KGE -0.29, worse than 14d persistence baseline). Node 4 not recommended for drydown prediction as-is. See reports/node_4.md.",
+    "equifinality": {
+      "wet_ref": {
+        "mean": 2217.452,
+        "std": 223.563,
+        "cv": 0.101
+      },
+      "dry_ref": {
+        "mean": 2660.473,
+        "std": 447.126,
+        "cv": 0.168
+      },
+      "Kc": {
+        "mean": 0.418,
+        "std": 0.243,
+        "cv": 0.58
+      },
+      "p": {
+        "mean": 0.677,
+        "std": 0.136,
+        "cv": 0.201
+      },
+      "scale_mm_to_raw": {
+        "mean": 16.345,
+        "std": 11.164,
+        "cv": 0.683
+      }
+    },
+    "equifinality_kge_std": 5.33e-10,
+    "holdout": {
+      "held_out_window_days": 20.7,
+      "trained_on_windows_days": [
+        11.6,
+        15.3
+      ],
+      "held_out_kge": -0.2873539334995323,
+      "held_out_rmse": 140.8730926092421,
+      "min_windows_used": 2,
+      "note": "calibrate_node's floor loosened to min_windows=2 for this fit only, user-approved -- see NIGHT_SUMMARY.md"
+    }
   },
   "5": {
     "node_id": 5,

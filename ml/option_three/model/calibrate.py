@@ -92,11 +92,20 @@ def make_objective(windows: list[WindowData]):
     return objective
 
 
-def calibrate_node(windows: list[WindowData], seed: int = 0, **de_kwargs) -> dict:
+def calibrate_node(windows: list[WindowData], seed: int = 0, min_windows: int = 3, **de_kwargs) -> dict:
     """Fits one node's parameters jointly across all its windows. Returns
-    {"params": {...}, "kge": float, "seed": seed}."""
-    if len(windows) < 3:
-        raise ValueError(f"need at least 3 usable windows to calibrate, got {len(windows)}")
+    {"params": {...}, "kge": float, "seed": seed}.
+
+    min_windows defaults to 3, the task spec's own floor for calibrating a
+    node at all. eval/validate.holdout_validate passes min_windows=2: it
+    trains on windows-minus-one, so a node with exactly 3 windows (the
+    floor) would otherwise never be hold-out-validatable at all. The
+    standalone 3-window floor for real (non-hold-out) calibration is
+    unchanged -- only hold-out's internal training fit is allowed to run
+    thinner than that, on the user's explicit call, at the cost of a
+    weaker fit than the spec's own bar."""
+    if len(windows) < min_windows:
+        raise ValueError(f"need at least {min_windows} usable windows to calibrate, got {len(windows)}")
     objective = make_objective(windows)
     bounds = [BOUNDS[p] for p in PARAM_ORDER]
     result = differential_evolution(objective, bounds, seed=seed, polish=True, tol=1e-6, maxiter=500, **de_kwargs)
