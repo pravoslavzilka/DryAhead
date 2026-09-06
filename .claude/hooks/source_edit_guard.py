@@ -40,6 +40,15 @@ def main() -> None:
     if basename in ("CLAUDE.md", "platformio.ini"):
         sys.exit(0)
 
+    # Scoped carve-out, explicitly authorized by the user for the
+    # 2026-09-06 overnight run: ml/option_three/ is that task's entire
+    # "Allowed files" scope (see
+    # overNightClaude/queue/01-dryahead-drydown-calibration.md). Every
+    # other ml/ path, and every other protected dir, stays fully locked
+    # per SETUP.md item 4.
+    if normalized.startswith("ml/option_three/"):
+        sys.exit(0)
+
     for prefix in PROTECTED_DIRS:
         if f"/{prefix}" in normalized or normalized.startswith(prefix):
             print(

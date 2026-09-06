@@ -10,6 +10,13 @@
       "Bash(git branch)",
       "Bash(git branch *)",
       "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(pip install *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pytest)",
+      "Bash(pytest *)",
       "Bash(npm run build)",
       "Bash(npm run dev)",
       "Bash(just backend)",
@@ -17,10 +24,15 @@
       "Bash(just fw-build)"
     ],
     "deny": [
+      "Bash(git push *)",
       "Bash(git push --force *)",
       "Bash(git push -f *)",
       "Bash(git push --force-with-lease *)",
       "Bash(git reset --hard *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(git branch -d *)",
+      "Bash(git branch -D *)",
       "Bash(rm -rf *)",
       "Bash(supabase db reset *)"
     ]
