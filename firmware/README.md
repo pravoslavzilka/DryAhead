@@ -1,9 +1,17 @@
 # firmware
 
 The code that runs on the ESP32 boards (see `hardware/circuit/` for the board they run on): the
-field sensor nodes and the base-station hub that collects their LoRa transmissions. Built as
-plain **Arduino IDE sketches** — each sketch lives in its own folder named identically to its
-`.ino` file, which is what the Arduino toolchain requires to open/compile it.
+field sensor nodes and the base-station hub that collects their LoRa transmissions. **Live on 4
+field nodes** near Zaježová, Slovakia, since 2026-06-29 — see the root `README.md` for
+deployment results. Never edit this source without the user's explicit go-ahead; a bad flash is
+expensive to fix in the field.
+
+Each sketch (`nodes/node_with_rtc/`, `nodes/node_no_rtc/`, `hub/`) lives in its own folder named
+identically to its `.ino` file, which is what the Arduino toolchain requires to open/compile it.
+Each folder also has its own `platformio.ini`, so the same sketches are CLI-buildable with
+`pio run` (one self-contained PlatformIO project per sketch — PlatformIO has no per-environment
+`src_dir` option, so a single project-wide config covering all three doesn't work). This is what
+`.github/workflows/firmware.yml` and the root `justfile`'s `fw-build` recipe actually run.
 
 - **`nodes/`** — the firmware flashed onto field sensor nodes. There are two configurations,
   depending on whether the physical board has a DS3231 RTC module fitted:
@@ -35,8 +43,9 @@ plain **Arduino IDE sketches** — each sketch lives in its own folder named ide
     doesn't reply, so it won't work with the current `node_with_rtc` / `node_no_rtc` sketches.
 
 - **`libraries/`** — third-party Arduino libraries used to build, vendored locally for
-  convenience. **Not committed to git** (see `firmware/.gitignore`) — install these yourself via
-  the Arduino Library Manager, pinned to the versions below:
+  convenience when building via the Arduino IDE. **Not committed to git** (see
+  `firmware/.gitignore`) — the pinned versions live in each sketch's `platformio.ini`
+  (`lib_deps`), which is what `pio run` actually resolves against:
   - LoRa (Sandeep Mistry) `0.8.0`
   - RTClib (Adafruit) `2.1.4`
   - Adafruit BusIO `1.17.4`

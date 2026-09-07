@@ -26,6 +26,20 @@ here — never the service_role key.
   brush zoom) with dashed guides at the dry-soil and wet-soil calibration
   points, a separate temperature chart, and the raw calibration values.
   Deep-linkable via `#sensor-<node_id>`.
+- **Hub status card** (`HubStatusCard`): the hub's own heartbeat history (168 h)
+  as a bar chart, with an Online/Offline/issue-reported badge — the thing that
+  tells you whether a quiet sensor means "no rain" or "the hub is offline."
+- **Reception activity** (`ReceptionActivity`): a GitHub-style delivery
+  heatmap — received vs. expected readings per day/week/month bucket, per
+  node — for spotting delivery gaps like the ones described in the root
+  README's field-deployment table at a glance.
+- **Instructions widget** (`InstructionsWidget`): outstanding/recent
+  `GETDATA` backfill instructions and their state, surfacing what
+  `backend/reconciliation/` has queued or resolved.
+- **Weather strip** (`WeatherStrip`): local forecast context alongside the
+  sensor readings.
+- **About page**: project background for a visitor landing on the dashboard
+  cold.
 - Data auto-refreshes every 5 minutes (sensors report every ~20 min).
 
 ## Data handling notes

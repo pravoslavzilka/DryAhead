@@ -21,5 +21,7 @@ Different candidate approaches live in their own top-level folders here, evaluat
 merits before anything is picked as the platform's model:
 
 - **`option_one/`** -- a physically-based FAO-56 root-zone bucket model, calibrated per node
-  against real sensor readings with differential evolution (KGE-scored). No ML. See
-  `option_one/README.md`.
+  against real sensor readings with differential evolution (KGE-scored). No ML. Already built
+  and run against live Supabase data (see `option_one/README.md` for current results) --
+  **intentionally left uncommitted (untracked in git)** for now, so don't assume it's missing
+  if `git status` shows it that way; committing it is the user's call on their own timeline.
