@@ -71,10 +71,8 @@ function startOfDay(ms) {
 /** One entry per calendar day covered by the loaded range, with a read count and
  * completeness ratio against the expected reading cadence (partial for the range's
  * first/last day, whose coverage may be less than a full 24 h). */
-function buildDayCompleteness(data, rangeHours) {
+function buildDayCompleteness(data, rangeStart, now) {
   const DAY_MS = 86400000
-  const now = Date.now()
-  const rangeStart = now - rangeHours * 3600 * 1000
 
   const counts = new Map()
   for (const p of data) {
@@ -92,8 +90,8 @@ function buildDayCompleteness(data, rangeHours) {
   return days
 }
 
-function CompletenessCalendar({ data, rangeHours }) {
-  const days = buildDayCompleteness(data, rangeHours)
+function CompletenessCalendar({ data, from, to }) {
+  const days = buildDayCompleteness(data, from, to)
   return (
     <div>
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
@@ -130,6 +128,11 @@ function CompletenessCalendar({ data, rangeHours }) {
 export default function SensorModal({ sensor, onClose }) {
   const [rangeHours, setRangeHours] = useState(72)
   const [data, setData] = useState(null)
+  // The exact window the data was loaded for; the x-axis spans it even where
+  // readings are missing, so "7 d" always shows 7 days ending now.
+  const [span, setSpan] = useState(null)
+  // Brush (zoom slider) selection as data indices, or null when not zoomed.
+  const [zoom, setZoom] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -140,13 +143,27 @@ export default function SensorModal({ sensor, onClose }) {
 
   useEffect(() => {
     let cancelled = false
+    const to = Date.now()
+    const from = to - rangeHours * 3600 * 1000
     setData(null)
+    setZoom(null)
     setError(null)
-    fetchNodeHistory(sensor.nodeId, rangeHours, sensor.cal)
-      .then((rows) => !cancelled && setData(rows))
+    fetchNodeHistory(sensor.nodeId, from, to, sensor.cal)
+      .then((rows) => {
+        if (cancelled) return
+        setSpan({ from, to })
+        setData(rows)
+      })
       .catch((e) => !cancelled && setError(e.message ?? String(e)))
     return () => { cancelled = true }
   }, [sensor, rangeHours])
+
+  // Fixed to the selected window; follows the Brush while zoomed in.
+  const xDomain = zoom && data?.length
+    ? [data[zoom.startIndex].t, data[zoom.endIndex].t]
+    : span ? [span.from, span.to] : ['dataMin', 'dataMax']
+  const onBrushChange = ({ startIndex, endIndex }) =>
+    setZoom(startIndex === 0 && endIndex === (data?.length ?? 0) - 1 ? null : { startIndex, endIndex })
 
   const { dryPct, wetPct, latest, status } = sensor
   const meta = STATUS_META[status]
@@ -249,7 +266,8 @@ export default function SensorModal({ sensor, onClose }) {
                     <XAxis
                       dataKey="t"
                       type="number"
-                      domain={['dataMin', 'dataMax']}
+                      domain={xDomain}
+                      allowDataOverflow
                       tickFormatter={(t) => fmtTick(t, rangeHours)}
                       tick={{ fill: '#8a8580', fontSize: 11 }}
                       stroke="#d9cfc4"
@@ -298,6 +316,7 @@ export default function SensorModal({ sensor, onClose }) {
                       stroke="#ea580c"
                       fill="#fff7ed"
                       tickFormatter={(t) => fmtTick(t, rangeHours)}
+                      onChange={onBrushChange}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -316,7 +335,8 @@ export default function SensorModal({ sensor, onClose }) {
                     <XAxis
                       dataKey="t"
                       type="number"
-                      domain={['dataMin', 'dataMax']}
+                      domain={xDomain}
+                      allowDataOverflow
                       tickFormatter={(t) => fmtTick(t, rangeHours)}
                       tick={{ fill: '#8a8580', fontSize: 11 }}
                       stroke="#d9cfc4"
@@ -346,7 +366,7 @@ export default function SensorModal({ sensor, onClose }) {
           )}
 
           {/* Data completeness calendar */}
-          {data != null && <CompletenessCalendar data={data} rangeHours={rangeHours} />}
+          {data != null && span && <CompletenessCalendar data={data} from={span.from} to={span.to} />}
 
           {/* Calibration footer */}
           <div className="rounded-xl border border-orange-100 bg-orange-50/50 px-4 py-3 text-xs text-stone-500">
