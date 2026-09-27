@@ -39,7 +39,8 @@ reporting. Run daily, report weekly.
 run_pipeline.py
   1. confirm Supabase access           (data_supabase.check_access)
   2. pull + dedupe sensor readings     (data_supabase.load_daily_theta_proxy)
-  3. pull matching Open-Meteo history  (data_weather.fetch_historical_daily)
+  3. pull matching weather history     (data_weather.fetch_historical_daily,
+                                        station rain via meteotekov.daily_rain_utc)
   4. calibrate per node                (calibrate.calibrate_all)
   5. validate vs. persistence          (validate.validate_node)
   6. ensemble forecast + AWF index     (forecast.forecast_node, forecast.summarize_forecast)
@@ -87,6 +88,33 @@ from Open-Meteo for the site coordinates (same lat/lon the frontend already
 shows: Zajezova, Slovensko). Training and the eventual forecast both read
 `et0_fao_evapotranspiration` from Open-Meteo -- deliberately the same
 source, so calibration and inference never see systematically different ET0.
+
+**Rain for calibration comes from the meteotekov.sk Zajezova station, not
+Open-Meteo** (`--rain-source station`, the default). The station is in the
+same area as the nodes; Open-Meteo is a coarse grid. Compared over
+2026-06-29..09-24, Open-Meteo got the seasonal total roughly right (75 vs 91
+mm) but daily totals correlated only r=0.58: it missed the season's biggest
+storm (24.7 mm measured on 07-15 vs 1.3 mm gridded), put 11.7 mm on
+07-01..03 when the station saw 0.7 mm (station humidity never passed 73%
+that evening -- no rain fell there), and reported 10 wet days (>=1 mm) the
+station didn't have. Summer convective cells are a few km wide; the grid
+smears them. With only a couple of months of data, one missed 25 mm storm
+is enough to distort a calibration.
+
+`meteotekov.py` scrapes the station's daily archive pages
+(`https://meteotekov.sk/@zajezova/statistiky/archiv/YYYY-MM-DD`, ~1-minute
+rows) into `data/meteotekov_zajezova.sqlite` (git-ignored). `run_pipeline.py`
+fetches any missing days first (`--no-scrape` to skip), then
+`meteotekov.daily_rain_utc` turns the station's running daily total (resets
+at local midnight) into per-UTC-day rain matching Open-Meteo's UTC days. Any
+day the station doesn't cover falls back to Open-Meteo, and the run prints
+how many did. `--rain-source open-meteo` restores the old behaviour.
+
+The forecast still has to use Open-Meteo ensemble rain -- the station can't
+forecast -- so the model is now trained on measured rain but forecast on
+gridded rain. That's the right trade here (calibration needs the rain that
+actually hit the soil), but expect forecast rain to be over-frequent/too
+light in summer, per the comparison above.
 
 No oven-dried soil samples exist yet to calibrate raw ADC counts to true
 volumetric `theta`, so `calibrate.py` fits two extra parameters per node
@@ -214,3 +242,152 @@ against Supabase + Open-Meteo.
   nodes and shared parameters at once.
 - Ensemble forecast reforecast bias-correction isn't applied; Open-Meteo's
   raw ensemble spread is used as-is.
+- **ET0** is still Open-Meteo's. The station also logs temperature,
+  humidity, wind and solar radiation -- enough for a local FAO-56
+  Penman-Monteith ET0, the natural next step after station rain.
+- **Station rain vs forecast rain** come from different sources (see
+  "3-4. Weather + calibration"); no correction between them is applied yet.
+
+## Drying model (`drydown.py`, `run_drydown.py`)
+
+A separate model for **how a node's soil reading falls (dries) between
+wettings**, driven only by weather -- no rain in it. Rain belongs to a
+wetting model (not built yet). The combined `run_pipeline.py` above is kept
+unchanged as a baseline.
+
+Settings (agreed 2026-09-25):
+
+- **Nodes 1, 4, 5 only** (`config.MODEL_NODE_IDS`), each fit independently.
+- **Raw ADC counts**, not %: the % proxy is clamped at 0/100 before averaging
+  and can't be converted back; raw can always become % later. Higher raw =
+  drier on these sensors. Junk readings (<1%) are dropped in
+  `data_supabase.clean_raw_readings`.
+- **Starts 2026-07-01**: all sensors jump 360-830 counts on installation day
+  (06-29) while settling into the soil.
+- **Daily steps on the daily median, station-local days.** Every node reads
+  driest ~15:00 and wettest ~20-22:00 local; that daily swing (19-44 counts)
+  is bigger than a day's actual drying (3-10 counts), so hourly data would
+  mostly fit the cycle.
+- **Drying segments are cut by the node's own readings, not station rain.**
+  A segment runs from the day after a wetting peak to the day before the next
+  wetting. A wetting is a fall bigger than the node's daily swing, either
+  within 6 h (`detect_wettings`) or over 2-3 days (`detect_slow_wettings`),
+  that hasn't recovered a day later. Why not rain: rain under ~3 mm never
+  reached nodes 4/5, and showers that missed the station wetted nodes 1/4
+  (no watering near the nodes).
+- **Weather = station Penman-Monteith split in two** (`station_weather.py`):
+  `rad_mm` (sun) and `aero_mm` (air dryness x wind). Each day:
+  drainage above field capacity, then `Ks * (a*rad_mm + b*aero_mm)`.
+  Six parameters: `raw_fc`, `raw_wp`, `p`, `tau_d`, `a`, `b` -- see the
+  `drydown.py` docstring for the equation. Kc, root depth and the %->water
+  scale only ever act as one product while drying, so they're folded into
+  `a`/`b`. A single-rate variant (`a == b`, plain ET0, five parameters) is
+  fit alongside for comparison.
+- **Fit**: differential evolution minimising RMSE (counts) of each segment
+  simulated from its first observed day. Chronological 70/30 split; a segment
+  crossing the split is cut in two.
+- **Scored** from every observed day at 1/3/7/14-day horizons against
+  persistence (no change) and average drift (calibration's mean daily rise).
+
+Run: `python run_drydown.py` (needs `.env`; fetches missing station days
+first, `--no-scrape` to skip). Outputs in `outputs/`: `drydown_params.json`,
+`drydown_validation.json`, `drydown_segments_node<N>.csv` (observed vs
+simulated per day), `drydown_equifinality_node<N>.csv`.
+
+### Results (first run, 2026-09-25; data 07-01..09-24, validation from 08-30)
+
+RMSE in raw counts at 7 days ahead, held-out days only (n = 5-9 forecasts per
+node, so treat as indicative):
+
+| node | split a/b | single rate | persistence | avg drift |
+|---|---|---|---|---|
+| 1 | 12.2 | 9.5 | 14.9 | 26.6 |
+| 4 | 13.5 | 8.6 | 59.4 | 69.5 |
+| 5 | 17.8 | 8.0 | 47.5 | 20.7 |
+
+- The drying model beats both baselines at 7 days on every node, clearly
+  so on nodes 4 and 5. Node 1 spends most of the period at its dry end
+  (~2560), where "no change" is already close to right.
+- **The a/b split fits every node with `a` = 0**: all the weather-driven
+  drying goes on the air-drying term, identically across 8 restarts. But
+  the split doesn't predict better than plain ET0 x one rate -- the
+  single-rate model is equal or better on held-out days everywhere. So far
+  the data can't tell the sun and air terms apart usefully (they correlate,
+  r = 0.49, and there are only ~36 calibration days per node); `a` = 0 is
+  not yet evidence that sun doesn't dry these soils.
+- Not pinned down (equifinality): `raw_fc` and `tau_d` on nodes 1 and 5
+  (segments start the day after a wetting peak, so little fast-drainage
+  data); `raw_wp` and `p` on node 4 (after 07-15 it never dried far enough
+  to reach its dry end). Longer records and a dry autumn/spring should fix
+  both.
+
+## Wetting model (`wetting.py`, `run_wetting.py`)
+
+The counterpart of the drying model: **how far a node's reading drops (gets
+wetter) when rain falls**. Same nodes (1/4/5), raw counts, station rain.
+
+- **Events**: station rain grouped with <12 h gaps; showers under 1 mm
+  inside a bigger event's 48 h window are merged into it.
+- **Measured response**: drop of the 24 h rolling median from the 24 h
+  before the rain to its lowest point within 48 h after. The rolling median
+  removes the daily swing, and it's the level the daily drying model carries
+  on from. A window stops at the next event, and at wettings with no station
+  rain (which are left out -- station rain can't explain them). Drops below
+  the node's daily swing count as no response.
+- **Variants**, all capped at the node's wettest possible reading (`floor`):
+  - `linear`: drop = gain x rain
+  - `threshold`: drop = gain x (rain - s_top), fixed
+  - `store`: a top-layer store of `s_top` mm fills with rain, overflows to
+    the sensor, and dries at station ET0 between rains -- so rain a day or
+    two earlier changes how much of the next rain gets through (node 5 on
+    08-20/21).
+- **Scored with leave-one-event-out**: each event predicted by a fit that
+  never saw it. Only 4-5 responding events per node, so no time split.
+
+### Results (first run, 2026-09-26; events 07-01..09-25)
+
+Held-out RMSE in counts (and how often "responded / didn't" was right):
+
+| node | none | linear | threshold | store | best |
+|---|---|---|---|---|---|
+| 1 | 25 (86%) | 27 (86%) | 27 (86%) | 25 (86%) | none |
+| 4 | 292 (64%) | 68 (50%) | 61 (93%) | **55 (93%)** | store: s_top 4.4 mm, 98 counts/mm |
+| 5 | 129 (69%) | **53 (62%)** | 67 (77%) | 96 (85%) | linear: 11 counts/mm |
+
+- **Node 4** behaves like a textbook bucket: the first ~4-5 mm are held
+  above the sensor, after that ~100 counts per mm, within 1-2 hours
+  (8 h for 09-11's slow, steady rain), stopping at its fully-wet reading.
+- **Node 5** responds roughly in proportion to rain (~11 counts/mm) but
+  slowly -- its wettest point comes 11-50 h after the rain. The store gets
+  the respond/don't-respond call right most often (85%) but misjudges sizes;
+  with 4 responding events the linear fit is safer for now.
+- **Node 1 can't be predicted from station rain.** It barely moved for the
+  biggest storms (58 counts for 24.7 mm, nothing for 22.9 mm on 09-11
+  within 48 h; it drifted wetter over the following 2-6 days), and 4 of its
+  wettings (07-04, 07-19, 08-13, 09-20) had no station rain at all. Something
+  other than rain falling on it wets that spot -- worth checking on site.
+- Wettings with no station rain on nodes 4/5 (07-06/07 on node 4, 08-09 on
+  node 5) are likely showers that missed the station.
+
+## Dashboard drought forecast (`export_frontend_model.py`)
+
+The dashboard runs both models in the browser
+(`frontend/src/lib/droughtForecast.js`, a line-for-line port checked against
+the Python) for nodes 1/4/5, driven by Open-Meteo's 16-day forecast:
+
+- **Card label**: when the node reaches **plant stress** if no rain falls.
+  Plant stress = where the drying model's stress factor starts dropping,
+  `raw_fc + p * (raw_wp - raw_fc)` -- soil dry enough that plants struggle to
+  take up water. Chosen over the `dry_soil` calibration (4-9 %), which the
+  model says nodes 1 and 5 never reach (they bottom out at 30-40 %).
+- **Modal "Show drought forecast"**: a no-rain line, plus a with-forecast-rain
+  line through the wetting model (node 4 store, node 5 linear; node 1 has
+  none).
+- Uses the single-rate drying variant. Open-Meteo forecast ET0 is multiplied
+  by `et0_scale` (station / Open-Meteo, 0.716 over 2026-07-01..09-25) because
+  the models were fitted on station ET0.
+
+After refitting (`run_drydown.py`, `run_wetting.py`), run
+`python export_frontend_model.py` and commit
+`frontend/src/data/droughtModel.json` -- the deployed site reads it at build
+time. Caveat: fitted on summer only; autumn/winter drying is extrapolation.

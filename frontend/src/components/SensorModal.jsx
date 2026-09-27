@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, ComposedChart, LineChart, Area, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine, Brush,
 } from 'recharts'
 import { fetchNodeHistory } from '../hooks/useSensorData'
-import { STATUS_META, READINGS_PER_DAY } from '../lib/calibration'
+import { STATUS_META, READINGS_PER_DAY, rawToHumidity } from '../lib/calibration'
 import { timeAgo, fmtDateTime, fmtTick, fmtPct, fmtTemp } from '../lib/format'
+import { nodeModel, currentRaw, forecastNode, stressPct, MODEL_INFO } from '../lib/droughtForecast'
+import { useDroughtWeather } from '../hooks/useDroughtWeather'
+
+const DAY_MS = 86400000
+const FC_DRY_COLOR = '#ea580c'
+const FC_RAIN_COLOR = '#0d9488'
+const STRESS_COLOR = '#9333ea'
 
 const RANGES = [
   { label: '24 h', hours: 24 },
@@ -25,6 +32,17 @@ function ChartTooltip({ active, payload, label }) {
         <div className="text-stone-600">
           Humidity: <span className="font-semibold" style={{ color: '#1c5cab' }}>{fmtPct(p.humidity, 1)}</span>
           <span className="text-stone-400"> (raw {p.raw})</span>
+        </div>
+      )}
+      {p.fcDry != null && (
+        <div className="text-stone-600">
+          Forecast, no rain: <span className="font-semibold" style={{ color: FC_DRY_COLOR }}>{fmtPct(p.fcDry, 1)}</span>
+        </div>
+      )}
+      {p.fcRain != null && (
+        <div className="text-stone-600">
+          Forecast, with rain: <span className="font-semibold" style={{ color: FC_RAIN_COLOR }}>{fmtPct(p.fcRain, 1)}</span>
+          {p.rainMm > 0 && <span className="text-stone-400"> ({p.rainMm.toFixed(1)} mm that day)</span>}
         </div>
       )}
       {p.temperature != null && (
@@ -71,10 +89,8 @@ function startOfDay(ms) {
 /** One entry per calendar day covered by the loaded range, with a read count and
  * completeness ratio against the expected reading cadence (partial for the range's
  * first/last day, whose coverage may be less than a full 24 h). */
-function buildDayCompleteness(data, rangeHours) {
+function buildDayCompleteness(data, rangeStart, now) {
   const DAY_MS = 86400000
-  const now = Date.now()
-  const rangeStart = now - rangeHours * 3600 * 1000
 
   const counts = new Map()
   for (const p of data) {
@@ -92,8 +108,8 @@ function buildDayCompleteness(data, rangeHours) {
   return days
 }
 
-function CompletenessCalendar({ data, rangeHours }) {
-  const days = buildDayCompleteness(data, rangeHours)
+function CompletenessCalendar({ data, from, to }) {
+  const days = buildDayCompleteness(data, from, to)
   return (
     <div>
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
@@ -127,10 +143,57 @@ function CompletenessCalendar({ data, rangeHours }) {
   )
 }
 
+function whenText(f) {
+  if (!f) return '—'
+  if (f.stressedNow) return 'already in plant stress'
+  if (f.stressAt == null) return 'not within the forecast'
+  const days = Math.max(1, Math.round((f.stressAt - Date.now()) / DAY_MS))
+  return `${new Date(f.stressAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} (in ~${days} d)`
+}
+
+/** Plant-stress dates under both scenarios, plus what the forecast rests on. */
+function ForecastSummary({ forecast, cal }) {
+  const m = forecast.model
+  const errPct = m.validation_rmse_7d_counts != null && cal.air != null && cal.water != null
+    ? (m.validation_rmse_7d_counts / Math.abs(cal.air - cal.water)) * 100
+    : null
+  return (
+    <div className="space-y-1 rounded-xl border border-purple-100 bg-purple-50/40 px-4 py-3 text-xs text-stone-600">
+      <div>
+        <span className="font-semibold" style={{ color: FC_DRY_COLOR }}>If no rain:</span>{' '}
+        plant stress {whenText(forecast.dry)}
+      </div>
+      {forecast.wet ? (
+        <div>
+          <span className="font-semibold" style={{ color: FC_RAIN_COLOR }}>With forecast rain</span>
+          {' '}({forecast.rainTotal.toFixed(1)} mm over {forecast.days} d): plant stress {whenText(forecast.wet)}
+        </div>
+      ) : (
+        <div className="text-stone-500">
+          No rain line for this node: its readings don't follow the station's rain, so rain can't be forecast into it.
+        </div>
+      )}
+      <div className="text-[11px] text-stone-400">
+        Plant stress ({fmtPct(forecast.stress, 1)}) = soil dry enough that plants struggle to take up water.
+        Fitted on this node's own readings {MODEL_INFO.fitted_on.replace('..', ' to ')}; weather from the Open-Meteo
+        {' '}{forecast.days}-day forecast.{errPct != null && ` Typical 7-day error ~${errPct.toFixed(1)} %.`}
+      </div>
+    </div>
+  )
+}
+
 export default function SensorModal({ sensor, onClose }) {
   const [rangeHours, setRangeHours] = useState(72)
   const [data, setData] = useState(null)
+  // The exact window the data was loaded for; the x-axis spans it even where
+  // readings are missing, so "7 d" always shows 7 days ending now.
+  const [span, setSpan] = useState(null)
+  // Brush (zoom slider) selection as data indices, or null when not zoomed.
+  const [zoom, setZoom] = useState(null)
   const [error, setError] = useState(null)
+  const [showForecast, setShowForecast] = useState(false)
+  const hasModel = nodeModel(sensor.nodeId) != null
+  const { weather, error: forecastError } = useDroughtWeather(showForecast && hasModel)
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -140,13 +203,59 @@ export default function SensorModal({ sensor, onClose }) {
 
   useEffect(() => {
     let cancelled = false
+    const to = Date.now()
+    const from = to - rangeHours * 3600 * 1000
     setData(null)
+    setZoom(null)
     setError(null)
-    fetchNodeHistory(sensor.nodeId, rangeHours, sensor.cal)
-      .then((rows) => !cancelled && setData(rows))
+    fetchNodeHistory(sensor.nodeId, from, to, sensor.cal)
+      .then((rows) => {
+        if (cancelled) return
+        setSpan({ from, to })
+        setData(rows)
+      })
       .catch((e) => !cancelled && setError(e.message ?? String(e)))
     return () => { cancelled = true }
   }, [sensor, rangeHours])
+
+  // Drought forecast from the latest readings: no-rain line always, with-rain
+  // line only where this node has a rain model.
+  const forecast = useMemo(() => {
+    if (!showForecast || !weather) return null
+    const model = nodeModel(sensor.nodeId)
+    const x0 = currentRaw(sensor.history)
+    const t0 = sensor.latest?.t
+    const run = (withRain) => forecastNode(sensor.nodeId, x0, t0, weather.days, weather.todayIdx, { withRain })
+    const dry = run(false)
+    if (!model || !dry) return null
+    const wet = model.wetting.model !== 'none' ? run(true) : null
+    const ahead = weather.days.slice(weather.todayIdx)
+    const pct = (raw) => rawToHumidity(raw, sensor.cal)
+    const points = dry.points.map((p, i) => ({
+      t: p.t,
+      fcDry: pct(p.raw),
+      fcRain: wet ? pct(wet.points[i].raw) : undefined,
+      rainMm: i > 0 ? ahead[i - 1]?.rain : undefined,
+    }))
+    return {
+      model, dry, wet, points,
+      stress: stressPct(sensor.nodeId, sensor.cal),
+      days: ahead.length,
+      rainTotal: ahead.reduce((a, d) => a + d.rain, 0),
+      end: points.at(-1).t,
+    }
+  }, [showForecast, weather, sensor])
+
+  // Observed readings, then forecast points after them (both keyed on t).
+  const chartData = data && forecast ? [...data, ...forecast.points] : data
+
+  // Fixed to the selected window (extended to the forecast's end when shown);
+  // follows the Brush while zoomed in.
+  const xDomain = zoom && chartData?.length
+    ? [chartData[zoom.startIndex].t, chartData[zoom.endIndex].t]
+    : span ? [span.from, forecast ? Math.max(span.to, forecast.end) : span.to] : ['dataMin', 'dataMax']
+  const onBrushChange = ({ startIndex, endIndex }) =>
+    setZoom(startIndex === 0 && endIndex === (chartData?.length ?? 0) - 1 ? null : { startIndex, endIndex })
 
   const { dryPct, wetPct, latest, status } = sensor
   const meta = STATUS_META[status]
@@ -216,7 +325,31 @@ export default function SensorModal({ sensor, onClose }) {
                 {r.label}
               </button>
             ))}
+            {hasModel && (
+              <button
+                onClick={() => { setShowForecast((v) => !v); setZoom(null) }}
+                className={`ml-auto rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  showForecast
+                    ? 'border-purple-600 bg-purple-600 text-white shadow-sm'
+                    : 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                }`}
+              >
+                {showForecast ? 'Hide drought forecast' : 'Show drought forecast'}
+              </button>
+            )}
           </div>
+
+          {showForecast && (
+            forecastError ? (
+              <div className="text-xs text-red-600">Forecast unavailable: {forecastError}</div>
+            ) : !weather ? (
+              <div className="text-xs text-stone-400">Loading forecast…</div>
+            ) : forecast ? (
+              <ForecastSummary forecast={forecast} cal={sensor.cal} />
+            ) : (
+              <div className="text-xs text-stone-500">Not enough recent readings to start a forecast from.</div>
+            )
+          )}
 
           {/* Humidity chart */}
           <div>
@@ -225,6 +358,13 @@ export default function SensorModal({ sensor, onClose }) {
               <span className="text-[11px] text-stone-400">
                 <span style={{ color: '#d03b3b' }}>▪</span> dry-soil limit&nbsp;&nbsp;
                 <span style={{ color: '#199e70' }}>▪</span> wet-soil limit (mud)
+                {forecast && (
+                  <>
+                    &nbsp;&nbsp;<span style={{ color: STRESS_COLOR }}>▪</span> plant stress
+                    &nbsp;&nbsp;<span style={{ color: FC_DRY_COLOR }}>- -</span> forecast, no rain
+                    {forecast.wet && <>&nbsp;&nbsp;<span style={{ color: FC_RAIN_COLOR }}>···</span> with rain</>}
+                  </>
+                )}
               </span>
             </div>
             <div className="h-80">
@@ -238,7 +378,11 @@ export default function SensorModal({ sensor, onClose }) {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
+                  <ComposedChart
+                    key={forecast ? 'forecast' : 'observed'}
+                    data={chartData}
+                    margin={{ top: 8, right: 12, bottom: 0, left: -12 }}
+                  >
                     <defs>
                       <linearGradient id="hum-grad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#2a78d6" stopOpacity={0.25} />
@@ -249,7 +393,8 @@ export default function SensorModal({ sensor, onClose }) {
                     <XAxis
                       dataKey="t"
                       type="number"
-                      domain={['dataMin', 'dataMax']}
+                      domain={xDomain}
+                      allowDataOverflow
                       tickFormatter={(t) => fmtTick(t, rangeHours)}
                       tick={{ fill: '#8a8580', fontSize: 11 }}
                       stroke="#d9cfc4"
@@ -291,6 +436,47 @@ export default function SensorModal({ sensor, onClose }) {
                       connectNulls
                       isAnimationActive={false}
                     />
+                    {forecast && forecast.stress != null && (
+                      <ReferenceLine
+                        y={forecast.stress}
+                        stroke={STRESS_COLOR}
+                        strokeDasharray="4 4"
+                        strokeWidth={1.5}
+                        label={{ value: 'Plant stress', position: 'insideTopLeft', fill: STRESS_COLOR, fontSize: 11 }}
+                      />
+                    )}
+                    {forecast && (
+                      <ReferenceLine
+                        x={forecast.points[0].t}
+                        stroke="#a8a29e"
+                        strokeDasharray="2 3"
+                        label={{ value: 'now', position: 'insideTopRight', fill: '#8a8580', fontSize: 11 }}
+                      />
+                    )}
+                    {forecast && (
+                      <Line
+                        type="monotone"
+                        dataKey="fcDry"
+                        stroke={FC_DRY_COLOR}
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        dot={false}
+                        activeDot={{ r: 4, fill: FC_DRY_COLOR, stroke: '#fff', strokeWidth: 2 }}
+                        isAnimationActive={false}
+                      />
+                    )}
+                    {forecast?.wet && (
+                      <Line
+                        type="monotone"
+                        dataKey="fcRain"
+                        stroke={FC_RAIN_COLOR}
+                        strokeWidth={2}
+                        strokeDasharray="2 3"
+                        dot={false}
+                        activeDot={{ r: 4, fill: FC_RAIN_COLOR, stroke: '#fff', strokeWidth: 2 }}
+                        isAnimationActive={false}
+                      />
+                    )}
                     <Brush
                       dataKey="t"
                       height={26}
@@ -298,6 +484,7 @@ export default function SensorModal({ sensor, onClose }) {
                       stroke="#ea580c"
                       fill="#fff7ed"
                       tickFormatter={(t) => fmtTick(t, rangeHours)}
+                      onChange={onBrushChange}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -316,7 +503,8 @@ export default function SensorModal({ sensor, onClose }) {
                     <XAxis
                       dataKey="t"
                       type="number"
-                      domain={['dataMin', 'dataMax']}
+                      domain={xDomain}
+                      allowDataOverflow
                       tickFormatter={(t) => fmtTick(t, rangeHours)}
                       tick={{ fill: '#8a8580', fontSize: 11 }}
                       stroke="#d9cfc4"
@@ -346,7 +534,7 @@ export default function SensorModal({ sensor, onClose }) {
           )}
 
           {/* Data completeness calendar */}
-          {data != null && <CompletenessCalendar data={data} rangeHours={rangeHours} />}
+          {data != null && span && <CompletenessCalendar data={data} from={span.from} to={span.to} />}
 
           {/* Calibration footer */}
           <div className="rounded-xl border border-orange-100 bg-orange-50/50 px-4 py-3 text-xs text-stone-500">
