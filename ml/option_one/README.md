@@ -368,3 +368,26 @@ Held-out RMSE in counts (and how often "responded / didn't" was right):
   other than rain falling on it wets that spot -- worth checking on site.
 - Wettings with no station rain on nodes 4/5 (07-06/07 on node 4, 08-09 on
   node 5) are likely showers that missed the station.
+
+## Dashboard drought forecast (`export_frontend_model.py`)
+
+The dashboard runs both models in the browser
+(`frontend/src/lib/droughtForecast.js`, a line-for-line port checked against
+the Python) for nodes 1/4/5, driven by Open-Meteo's 16-day forecast:
+
+- **Card label**: when the node reaches **plant stress** if no rain falls.
+  Plant stress = where the drying model's stress factor starts dropping,
+  `raw_fc + p * (raw_wp - raw_fc)` -- soil dry enough that plants struggle to
+  take up water. Chosen over the `dry_soil` calibration (4-9 %), which the
+  model says nodes 1 and 5 never reach (they bottom out at 30-40 %).
+- **Modal "Show drought forecast"**: a no-rain line, plus a with-forecast-rain
+  line through the wetting model (node 4 store, node 5 linear; node 1 has
+  none).
+- Uses the single-rate drying variant. Open-Meteo forecast ET0 is multiplied
+  by `et0_scale` (station / Open-Meteo, 0.716 over 2026-07-01..09-25) because
+  the models were fitted on station ET0.
+
+After refitting (`run_drydown.py`, `run_wetting.py`), run
+`python export_frontend_model.py` and commit
+`frontend/src/data/droughtModel.json` -- the deployed site reads it at build
+time. Caveat: fitted on summer only; autumn/winter drying is extrapolation.
