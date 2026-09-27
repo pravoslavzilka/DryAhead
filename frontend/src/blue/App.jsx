@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import snapshot from './snapshot.json'
-import { Reveal, Counter, Source, Fill, ThemeToggle, fmtDate } from './ui'
+import { Reveal, Counter, Source, ThemeToggle, fmtDate } from './ui'
 import SoilFigure from './SoilFigure'
 import { DataChart, ForecastChart, WateringCompare } from './charts'
 import { SensorDay, Coverage, Gallery, LiveWidget } from './parts'
@@ -239,9 +239,8 @@ export default function App() {
                 <h3>Viac prežitých mladých stromov</h3>
                 <p>
                   Novovysadený strom nemá rozvinuté korene a prvé roky je odkázaný na zálievku. Podľa arboristov je najčastejšou
-                  príčinou úhynu mladých stromov po výsadbe to, že sú polievané málo alebo zle. DryAhead{' '}
-                  <Fill>„upozorní“ ak funguje / „má upozorniť“ ak ešte nie</Fill>, keď vlhkosť pri koreňoch klesne pod hranicu,
-                  pri ktorej strom začína trpieť.
+                  príčinou úhynu mladých stromov po výsadbe to, že sú polievané málo alebo zle. Na dashboarde DryAhead vidno,
+                  keď vlhkosť pri koreňoch klesá k hranici, pri ktorej strom začína trpieť.
                 </p>
                 <Source href={SRC.bn} />
               </Reveal>
@@ -318,7 +317,7 @@ export default function App() {
                 <h3>Dlhá životnosť</h3>
                 <p>
                   Uzly väčšinu času spia a spotrebúvajú len zlomok energie. Sú uložené v odolných krytoch proti dažďu,
-                  vlhkosti a teplotným výkyvom. <Fill>veta o opraviteľnosti, len ak platí</Fill>
+                  vlhkosti a teplotným výkyvom. Keď sa niečo pokazí, uzol sa dá opraviť, netreba ho vyhodiť a nahradiť novým.
                 </p>
               </Reveal>
               <Reveal><Coverage /></Reveal>
@@ -429,8 +428,8 @@ export default function App() {
               <p>
                 Mám rozbehnutú spoluprácu s Nadáciou Partnerství v Česku, ktorá podporuje ľudí a obce pri výsadbe stromov.
                 Nadácia by mohla DryAhead odporúčať ľuďom, ktorí stromy sadia, aby ich mladé stromy prežili prvé kritické
-                roky s čo najmenšou spotrebou vody. Na Slovensku chcem projekt postupne rozšíriť cez Ekopolis na podobné
-                ekologické projekty. <Fill>konkrétny typ slovenských projektov, ak viem</Fill>
+                roky s čo najmenšou spotrebou vody. Začínam práve s ňou. Na Slovensku chcem projekt postupne rozšíriť cez
+                Ekopolis na projekty, ktoré sadia stromy.
               </p>
               <p className="lead">
                 Cieľ: aby ľudia, ktorí sadia stromy a starajú sa o krajinu, hospodárili s vodou lepšie a zároveň im prežilo
@@ -442,7 +441,7 @@ export default function App() {
                 <li className="now"><div className="when">Dnes</div><b>Uzly v teréne pri Zvolene</b><p className="small" style={{ margin: 0 }}>Zber dát beží od konca júna 2026, model testujem.</p></li>
                 <li><div className="when">Ďalší krok</div><b>Pilot na ďalšej lokalite</b><p className="small" style={{ margin: 0 }}>Overiť, koľko vody sa pri mladých stromoch reálne ušetrí.</p></li>
                 <li><div className="when">Potom</div><b>Odporúčanie cez Nadáciu Partnerství</b><p className="small" style={{ margin: 0 }}>Ľuďom, ktorí v Česku sadia stromy.</p></li>
-                <li><div className="when">Cieľ</div><b>Rozšírenie cez Ekopolis</b><p className="small" style={{ margin: 0 }}>Na podobné ekologické projekty na Slovensku.</p></li>
+                <li><div className="when">Cieľ</div><b>Rozšírenie cez Ekopolis</b><p className="small" style={{ margin: 0 }}>Na projekty, ktoré na Slovensku sadia stromy.</p></li>
               </ol>
             </Reveal>
           </div>
@@ -458,9 +457,10 @@ export default function App() {
                 <table>
                   <thead><tr><th>Položka</th><th className="num">Suma</th></tr></thead>
                   <tbody>
-                    <tr><td>Uzly na pilotnú lokalitu: <Fill>X uzlov × Y €</Fill></td><td className="num"><Fill>€</Fill></td></tr>
-                    <tr><td>Senzory a batérie</td><td className="num"><Fill>€</Fill></td></tr>
-                    <tr><td>Vyhodnotenie a zdieľanie výsledkov</td><td className="num"><Fill>€</Fill></td></tr>
+                    <tr><td>Uzly na pilotnú lokalitu: 12 uzlov × 45 € <span className="muted small">(30 € elektronika, 15 € kryt)</span></td><td className="num">540 €</td></tr>
+                    <tr><td>Centrálna stanica pre pilotnú lokalitu</td><td className="num">60 €</td></tr>
+                    <tr><td>Batérie a náhradné senzory</td><td className="num">150 €</td></tr>
+                    <tr><td>Vyhodnotenie a zdieľanie výsledkov <span className="muted small">(meranie spotreby vody, cesty na lokalitu, návod pre ďalších)</span></td><td className="num">250 €</td></tr>
                     <tr><td><b>Spolu</b></td><td className="num"><b>1 000 €</b></td></tr>
                   </tbody>
                 </table>
@@ -564,7 +564,7 @@ ET0 = referenčný výpar z meteostanice (mm/deň)
                   <h3>Odkazy</h3>
                   <ul className="clean">
                     <li><a href="/">Živý dashboard</a></li>
-                    <li>GitHub: <a href="https://github.com/pravoslavzilka" target="_blank" rel="noopener noreferrer">github.com/pravoslavzilka</a> <Fill>presný repozitár</Fill></li>
+                    <li>Zdrojový kód: <a href="https://github.com/pravoslavzilka/DryAhead" target="_blank" rel="noopener noreferrer">github.com/pravoslavzilka/DryAhead</a></li>
                     <li>Metodika výparu: <a href={SRC.fao} target="_blank" rel="noopener noreferrer">FAO-56, Crop evapotranspiration</a></li>
                   </ul>
                 </div>
@@ -582,7 +582,7 @@ ET0 = referenčný výpar z meteostanice (mm/deň)
               Študent strojného inžinierstva na VUT v Brne. DryAhead staviam pre našu rodinnú pôdu na strednom Slovensku,
               kde každé leto vidím, ako sucho berie mladé stromy aj vodu zo studní.
             </p>
-            <p>Kontakt: <Fill>kontakt</Fill></p>
+            <p>Kontakt: <a href="mailto:pravoslav.zilka@gmail.com">pravoslav.zilka@gmail.com</a></p>
             <p className="small muted">Dáta na tejto stránke: snapshot k {fmtDate(snapshot.generated, { day: 'numeric', month: 'numeric', year: 'numeric' })}. Grafy fungujú aj bez pripojenia k databáze.</p>
           </div>
           <div>

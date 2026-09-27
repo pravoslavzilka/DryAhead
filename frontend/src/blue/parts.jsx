@@ -89,14 +89,17 @@ export function Coverage() {
 
 // ------------------------------------------------------------------- gallery
 
-// Photos go to frontend/public/blue/foto/ as WebP (about 1600 px wide).
+// Photos in frontend/public/blue/foto/: WebP, 640 px for the grid and 1600 px
+// for the lightbox, metadata (incl. GPS) stripped. `w`/`h` = 1600 version.
 export const PHOTOS = [
-  { file: 'uzol-v-terene.webp', caption: 'Senzorový uzol v teréne', alt: 'Senzorový uzol zakopaný v tráve na pozemku' },
-  { file: 'osadzovanie.webp', caption: 'Osadzovanie senzora do hĺbky koreňov', alt: 'Osadzovanie senzora do vykopanej jamy' },
-  { file: 'kryt.webp', caption: 'Odolný kryt DN160', alt: 'Kryt uzla z rúry DN160' },
-  { file: 'elektronika.webp', caption: 'Elektronika uzla: ESP32, LoRa, hodiny', alt: 'Doska s mikropočítačom ESP32 a rádiovým modulom' },
-  { file: 'stanica.webp', caption: 'Centrálna stanica', alt: 'Centrálna stanica, ktorá prijíma dáta z uzlov' },
-  { file: 'pozemok.webp', caption: 'Pozemok s mladými stromami pri Zvolene', alt: 'Pozemok s mladými stromami a ovcami' },
+  { name: 'uzol-pri-mladom-strome', w: 1600, h: 1200, caption: 'Uzol pri mladom strome na lúke', alt: 'Sivá rúrka senzorového uzla v tráve vedľa mladého stromu v ochrannom pletive' },
+  { name: 'uzol-v-rade-vysadby', w: 1600, h: 1200, caption: 'Uzol v rade novovysadených stromov', alt: 'Senzorový uzol na lúke pri rade mladých stromov v pletivách' },
+  { name: 'uzol-v-lese', w: 1600, h: 1200, caption: 'Uzol v lese medzi mladými stromami', alt: 'Senzorový uzol na lesnej pôde pokrytej lístím, v pozadí mladé stromy' },
+  { name: 'sadenica-v-lese', w: 1600, h: 1200, caption: 'Mladá sadenica v lese, uzol v pozadí', alt: 'Mladá ihličnatá sadenica medzi kameňmi a lístím, v pozadí senzorový uzol' },
+  { name: 'uzol-pri-oplotenom-strome', w: 1200, h: 1600, caption: 'Uzol pri oplotenom strome', alt: 'Senzorový uzol v tráve vedľa mladého stromu za drôteným plotom' },
+  { name: 'uzol-a-sadenica-v-lese', w: 1200, h: 1600, caption: 'Uzol pri chránenej sadenici v lese', alt: 'Senzorový uzol a sadenica s ochranným pletivom na lesnej pôde' },
+  { name: 'vysadba-na-luke', w: 1600, h: 1200, caption: 'Nová výsadba stromov na lúke', alt: 'Lúka s mladými stromami v ochranných pletivách a senzorovým uzlom' },
+  { name: 'uzol-za-sumraku', w: 1200, h: 1600, caption: 'Uzol pri strome za súmraku', alt: 'Senzorový uzol a mladý strom v pletive na lúke pri západe slnka' },
 ]
 
 function Photo({ photo, big }) {
@@ -104,13 +107,23 @@ function Photo({ photo, big }) {
   if (missing) {
     return (
       <div className="g-ph" style={big ? { minHeight: 300, color: '#ddd' } : undefined}>
-        <span>[DOPLNIŤ: fotka – {photo.caption.toLowerCase()}]<br /><small>public/blue/foto/{photo.file}</small></span>
+        <span>Fotka sa nenačítala: {photo.caption}</span>
       </div>
     )
   }
+  const base = `/blue/foto/${photo.name}`
   return (
-    <img src={`/blue/foto/${photo.file}`} alt={photo.alt} loading={big ? 'eager' : 'lazy'} decoding="async"
-      width="1600" height="1200" onError={() => setMissing(true)} />
+    <img
+      src={`${base}-${big ? 1600 : 640}.webp`}
+      srcSet={`${base}-640.webp 640w, ${base}-1600.webp 1600w`}
+      sizes={big ? '100vw' : '(min-width: 880px) 25vw, 50vw'}
+      alt={photo.alt}
+      loading={big ? 'eager' : 'lazy'}
+      decoding="async"
+      width={photo.w}
+      height={photo.h}
+      onError={() => setMissing(true)}
+    />
   )
 }
 
@@ -139,7 +152,7 @@ export function Gallery() {
     <>
       <div className="gallery">
         {PHOTOS.map((ph, i) => (
-          <button key={ph.file} className="g-item" onClick={(e) => { lastFocus.current = e.currentTarget; setOpen(i) }}
+          <button key={ph.name} className="g-item" onClick={(e) => { lastFocus.current = e.currentTarget; setOpen(i) }}
             aria-label={`Zväčšiť fotku: ${ph.caption}`}>
             <div className="g-img"><Photo photo={ph} /></div>
             <div className="g-cap">{ph.caption}</div>
