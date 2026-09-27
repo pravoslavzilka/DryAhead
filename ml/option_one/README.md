@@ -320,3 +320,51 @@ node, so treat as indicative):
   data); `raw_wp` and `p` on node 4 (after 07-15 it never dried far enough
   to reach its dry end). Longer records and a dry autumn/spring should fix
   both.
+
+## Wetting model (`wetting.py`, `run_wetting.py`)
+
+The counterpart of the drying model: **how far a node's reading drops (gets
+wetter) when rain falls**. Same nodes (1/4/5), raw counts, station rain.
+
+- **Events**: station rain grouped with <12 h gaps; showers under 1 mm
+  inside a bigger event's 48 h window are merged into it.
+- **Measured response**: drop of the 24 h rolling median from the 24 h
+  before the rain to its lowest point within 48 h after. The rolling median
+  removes the daily swing, and it's the level the daily drying model carries
+  on from. A window stops at the next event, and at wettings with no station
+  rain (which are left out -- station rain can't explain them). Drops below
+  the node's daily swing count as no response.
+- **Variants**, all capped at the node's wettest possible reading (`floor`):
+  - `linear`: drop = gain x rain
+  - `threshold`: drop = gain x (rain - s_top), fixed
+  - `store`: a top-layer store of `s_top` mm fills with rain, overflows to
+    the sensor, and dries at station ET0 between rains -- so rain a day or
+    two earlier changes how much of the next rain gets through (node 5 on
+    08-20/21).
+- **Scored with leave-one-event-out**: each event predicted by a fit that
+  never saw it. Only 4-5 responding events per node, so no time split.
+
+### Results (first run, 2026-09-26; events 07-01..09-25)
+
+Held-out RMSE in counts (and how often "responded / didn't" was right):
+
+| node | none | linear | threshold | store | best |
+|---|---|---|---|---|---|
+| 1 | 25 (86%) | 27 (86%) | 27 (86%) | 25 (86%) | none |
+| 4 | 292 (64%) | 68 (50%) | 61 (93%) | **55 (93%)** | store: s_top 4.4 mm, 98 counts/mm |
+| 5 | 129 (69%) | **53 (62%)** | 67 (77%) | 96 (85%) | linear: 11 counts/mm |
+
+- **Node 4** behaves like a textbook bucket: the first ~4-5 mm are held
+  above the sensor, after that ~100 counts per mm, within 1-2 hours
+  (8 h for 09-11's slow, steady rain), stopping at its fully-wet reading.
+- **Node 5** responds roughly in proportion to rain (~11 counts/mm) but
+  slowly -- its wettest point comes 11-50 h after the rain. The store gets
+  the respond/don't-respond call right most often (85%) but misjudges sizes;
+  with 4 responding events the linear fit is safer for now.
+- **Node 1 can't be predicted from station rain.** It barely moved for the
+  biggest storms (58 counts for 24.7 mm, nothing for 22.9 mm on 09-11
+  within 48 h; it drifted wetter over the following 2-6 days), and 4 of its
+  wettings (07-04, 07-19, 08-13, 09-20) had no station rain at all. Something
+  other than rain falling on it wets that spot -- worth checking on site.
+- Wettings with no station rain on nodes 4/5 (07-06/07 on node 4, 08-09 on
+  node 5) are likely showers that missed the station.

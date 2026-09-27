@@ -136,16 +136,24 @@ def detect_slow_wettings(daily: pd.Series, threshold: float, tz: str) -> list[di
     misses -- node 1 took ~38 h to respond to 09-11's rain, and got wetter
     by ~70 counts over 08-24..08-27 with no station rain at all. A daily
     median more than `threshold` below the wettest of the previous 3 days,
-    and still wetter the next day, marks one. Same {onset, peak, size} shape."""
+    and still wetter the next day, marks one. Same {onset, peak, size} shape,
+    plus slow=True: onset/peak are day starts, so the wettest point can be
+    any time up to the end of the peak day."""
     d = daily.dropna()
     episodes = []
-    for i in range(3, len(d) - 1):
+    i = 3
+    while i < len(d) - 1:
         prev = d.iloc[i - 3:i]
         fall = prev.max() - d.iloc[i]
         if fall > threshold and prev.max() - d.iloc[i + 1] > threshold / 2:
             onset = prev.idxmax() + pd.Timedelta(days=1)
-            window = d[d.index[i]:d.index[i] + pd.Timedelta(days=3)]
-            episodes.append({"onset": onset.tz_localize(tz), "peak": window.idxmin().tz_localize(tz), "size": float(fall)})
+            peak = d[d.index[i]:d.index[i] + pd.Timedelta(days=3)].idxmin()
+            # onset/peak are whole days (local midnight at the day's start)
+            episodes.append({"onset": onset.tz_localize(tz), "peak": peak.tz_localize(tz),
+                             "size": float(fall), "slow": True})
+            i = d.index.get_loc(peak) + 1  # one episode, not one per day of it
+        else:
+            i += 1
     return episodes
 
 
