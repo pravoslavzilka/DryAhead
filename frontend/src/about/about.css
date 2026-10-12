@@ -1,0 +1,33 @@
+/* /about extras on top of ../blue/blue.css (same tokens, both themes). */
+
+/* ---------- history: vertical log ---------- */
+.history { list-style: none; margin: 0; padding: 0; position: relative; }
+.history::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+.history li { position: relative; padding: 0 0 22px 34px; }
+.history li:last-child { padding-bottom: 0; }
+.history li::before {
+  content: ""; position: absolute; left: 0; top: 5px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--card); border: 3px solid var(--k, var(--muted));
+}
+.history li.k-field { --k: var(--soil); }
+.history li.k-data { --k: var(--water); }
+.history li.k-model { --k: var(--leaf); }
+.history li.k-fault { --k: var(--warn); }
+.history li.k-fix { --k: var(--water-2); }
+.history .when { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--k, var(--muted)); }
+.history li.k-fix .when { color: var(--water); } /* --water-2 is too light for text */
+.history b { display: block; margin: 2px 0 4px; }
+.history p { margin: 0; }
+
+.history-key { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 18px; font-size: 0.85rem; color: var(--muted); }
+.history-key span::before {
+  content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--k); margin-right: 6px; vertical-align: -1px;
+}
+
+/* ---------- node status pills ---------- */
+.pill { display: inline-block; font-size: 0.8rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.pill.ok { color: var(--leaf); border-color: color-mix(in srgb, var(--leaf) 45%, transparent); }
+.pill.warn { color: var(--sun-text, var(--ink)); border-color: color-mix(in srgb, var(--sun) 55%, transparent); }
+.pill.off { color: var(--muted); border-style: dashed; }
+td.status { white-space: normal; }

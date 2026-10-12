@@ -86,7 +86,7 @@ not yet a calibrated volumetric-moisture percentage.
 | Backend (`backend/`) | FastAPI stub (`/health` only) — the hub currently writes straight to Supabase, bypassing this service |
 | Reconciliation (`backend/reconciliation/`) | Working, standalone script; recovers backfill after connectivity gaps |
 | Database | Supabase-managed PostgreSQL, live: `readings`, `hub_status`, `instructions` tables |
-| Frontend (`frontend/`) | Live dashboard — map, sensor cards, detail charts, hub status, drought forecast (nodes 1/4/5), presentation page, deployed to Vercel |
+| Frontend (`frontend/`) | Live dashboard — map, sensor cards, detail charts, hub status, drought forecast (nodes 1/4/5); English project page at `/about/` (description, results, history) and the Slovak Blue Challenge page at `/blue/`; deployed to Vercel |
 | Model (`ml/`) | **Working drying + wetting models for nodes 1, 4, 5**, beating persistence at 7 days on every node; running live in the dashboard as a plant-stress forecast. The original combined bucket model still loses to persistence. See [The model](#the-model). |
 | Node data recovery (`tools/`) | Pulls a node's LittleFS log over USB (sketch or read-only esptool script); used to backfill node 3 |
 | Hardware (`hardware/`) | No KiCad sources committed yet — design lives in the deployed prototype and `hardware/bom.csv` |
