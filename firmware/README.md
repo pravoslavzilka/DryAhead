@@ -20,9 +20,19 @@ Each folder also has its own `platformio.ini`, so the same sketches are CLI-buil
   - **`node_no_rtc/`** — no RTC module. It times itself off the ESP32's internal (less accurate)
     clock and gets periodically corrected by a `TIME:` message from the hub.
 
-  Both send readings over LoRa and log locally to flash (LittleFS) so a node can resend a backlog
-  if it misses a transmission window. `NODE_ID` is a `#define` near the top of each sketch — set
-  it uniquely before flashing each physical node.
+  Both send readings over LoRa and log locally to flash (LittleFS, `/log.csv`) so a node can
+  resend a backlog if it misses a transmission window. `NODE_ID` is a `#define` near the top of
+  each sketch — set it uniquely before flashing each physical node (`node_with_rtc` currently
+  has `2`).
+
+  Known issues seen in field data: nodes log **two readings 8–13 s apart in most 20-minute
+  slots** (a double wake per cycle). If the DS3231 doesn't answer, `node_with_rtc` logs and
+  sends epoch `0`, which `sendDataSince()` then never resends. Node 3 lost about half its
+  timestamps this way.
+
+  To get a node's full local log onto a computer over USB, see `tools/` at the repo root. On
+  the LaskaKit ESP32-DEVKit, uploading needs GPIO0 jumpered to GND, because the board has no
+  BOOT button and auto-reset doesn't work reliably.
 
 - **`hub/`** — the base-station firmware: listens on LoRa, receives node packets, and replies
   during each node's listen window with `TIME:` / `GETDATA:` / `CFG:` commands. This is the

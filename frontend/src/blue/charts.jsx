@@ -1,14 +1,61 @@
 import { useMemo, useState } from 'react'
-import { useWidth, fmtDate } from './ui'
+import { useWidth, useLang, localeOf, fmtDate, fmtDec } from './ui'
 
 const NODE_META = {
-  1: { color: 'var(--n1)', label: 'Uzol 1' },
-  3: { color: 'var(--n3)', label: 'Uzol 3' },
-  4: { color: 'var(--n4)', label: 'Uzol 4' },
-  5: { color: 'var(--n5)', label: 'Uzol 5' },
+  1: { color: 'var(--n1)' },
+  3: { color: 'var(--n3)' },
+  4: { color: 'var(--n4)' },
+  5: { color: 'var(--n5)' },
+}
+const nodeLabel = (id, lang) => `${lang === 'en' ? 'Node' : 'Uzol'} ${id}`
+// Short dates: numeric in Slovak (10. 9.), month name in English (10 Sep) since 10/09 is ambiguous.
+const shortDate = (lang) => (lang === 'en' ? { day: 'numeric', month: 'short' } : undefined)
+
+const fmtNum = (v, d = 1, lang = 'sk') => (v == null ? '–' : fmtDec(v, d, lang))
+
+const DATA_T = {
+  sk: {
+    summary: (nodes, from, to, storms) => `Graf dennej vlhkosti pôdy pre uzly ${nodes} od ${from} do ${to}, s dennými zrážkami zo stanice Zaježová. Najväčšie dažde: ${storms}.`,
+    show: 'Zobraziť uzly',
+    until: 'do',
+    rainLegend: 'dážď (mm, stanica Zaježová)',
+    dryShort: '24 dní bez dažďa',
+    dryLong: 'tu pôda vysychá: 24 dní bez dažďa',
+    rainHere: (mm) => `tu pršalo (${mm} mm)`,
+    rain: 'dážď',
+    note: 'Denný medián vlhkosti pôdy (0 % = senzor na vzduchu, 100 % = senzor vo vode). Ťuknite alebo prejdite myšou na graf, prípadne ho vyberte klávesom Tab a použite šípky.',
+  },
+  en: {
+    summary: (nodes, from, to, storms) => `Daily soil moisture for nodes ${nodes} from ${from} to ${to}, with daily rain from the Zaježová station. Biggest rains: ${storms}.`,
+    show: 'Show nodes',
+    until: 'until',
+    rainLegend: 'rain (mm, Zaježová station)',
+    dryShort: '24 days without rain',
+    dryLong: 'the soil dries out: 24 days without rain',
+    rainHere: (mm) => `rain (${mm} mm)`,
+    rain: 'rain',
+    note: 'Daily median soil moisture (0 % = sensor in air, 100 % = sensor in water). Tap or hover over the chart, or select it with Tab and use the arrow keys.',
+  },
 }
 
-const fmtNum = (v, d = 1) => (v == null ? '–' : v.toFixed(d).replace('.', ','))
+const FORECAST_T = {
+  sk: {
+    measured: 'meranie',
+    model: 'predpoveď modelu',
+    persistence: '„zostane to tak“',
+    baseline: '„zostane to tak“ (baseline)',
+    aria: (node, from, to) => `Experimentálna predpoveď vysychania pre uzol ${node} od ${from} do ${to}: model spustený z prvého merania, porovnaný s meraním a s odhadom, že vlhkosť zostane rovnaká.`,
+    day: 'deň',
+  },
+  en: {
+    measured: 'measured',
+    model: 'model forecast',
+    persistence: '“stays the same”',
+    baseline: '“stays the same” (baseline)',
+    aria: (node, from, to) => `Drying forecast for node ${node} from ${from} to ${to}: the model started from the first measurement, compared with the measurements and with assuming moisture stays the same.`,
+    day: 'day',
+  },
+}
 
 /** SVG path through points, breaking at nulls. */
 function linePath(values, x, y) {
@@ -52,6 +99,8 @@ function useCursor(n, x0, step) {
 // ---------------------------------------------------------------- real data
 
 export function DataChart({ snapshot }) {
+  const lang = useLang()
+  const t = DATA_T[lang]
   const [ref, width] = useWidth()
   const [shown, setShown] = useState({ 1: true, 3: true, 4: true, 5: true })
   const days = snapshot.days
@@ -76,11 +125,14 @@ export function DataChart({ snapshot }) {
   const months = days.map((d, i) => ({ d, i })).filter(({ d }) => d.endsWith('-01'))
 
   const nodes = Object.keys(snapshot.nodes).map(Number)
-  const summary = `Graf dennej vlhkosti pôdy pre uzly ${nodes.join(', ')} od ${fmtDate(days[0])} do ${fmtDate(days[n - 1])}, s dennými zrážkami zo stanice Zaježová. Najväčšie dažde: ${storms.map((s) => `${fmtDate(s.d)} ${fmtNum(s.mm)} mm`).join(', ')}.`
+  const summary = t.summary(
+    nodes.join(', '), fmtDate(days[0], shortDate(lang), lang), fmtDate(days[n - 1], shortDate(lang), lang),
+    storms.map((s) => `${fmtDate(s.d, shortDate(lang), lang)} ${fmtNum(s.mm, 1, lang)} mm`).join(', '),
+  )
 
   return (
     <div>
-      <div className="legend" role="group" aria-label="Zobraziť uzly">
+      <div className="legend" role="group" aria-label={t.show}>
         {nodes.map((id) => (
           <button
             key={id}
@@ -89,14 +141,14 @@ export function DataChart({ snapshot }) {
             onClick={() => setShown((s) => ({ ...s, [id]: !s[id] }))}
           >
             <span className="dot" style={{ background: NODE_META[id].color }} />
-            {NODE_META[id].label}
+            {nodeLabel(id, lang)}
             {snapshot.nodes[id].last_day < days[n - 1] && (
-              <span className="muted small">(do {fmtDate(snapshot.nodes[id].last_day)})</span>
+              <span className="muted small">({t.until} {fmtDate(snapshot.nodes[id].last_day, shortDate(lang), lang)})</span>
             )}
           </button>
         ))}
         <span className="small muted" style={{ alignSelf: 'center' }}>
-          <span className="sw" style={{ background: 'var(--water-2)', height: 8, width: 10, opacity: 0.6 }} />dážď (mm, stanica Zaježová)
+          <span className="sw" style={{ background: 'var(--water-2)', height: 8, width: 10, opacity: 0.6 }} />{t.rainLegend}
         </span>
       </div>
       <div className="chart" ref={ref}>
@@ -116,7 +168,7 @@ export function DataChart({ snapshot }) {
           ))}
           {months.map(({ d, i }) => (
             <text key={d} x={x(i)} y={H - 6} textAnchor="middle">
-              {new Date(`${d}T12:00:00`).toLocaleDateString('sk-SK', { month: narrow ? 'short' : 'long' })}
+              {new Date(`${d}T12:00:00`).toLocaleDateString(localeOf(lang), { month: narrow ? 'short' : 'long' })}
             </text>
           ))}
 
@@ -125,7 +177,7 @@ export function DataChart({ snapshot }) {
             <g>
               <rect x={x(dryFrom)} y={m.t} width={x(dryTo) - x(dryFrom)} height={ph} fill="var(--sun)" opacity="0.08" />
               <text x={(x(dryFrom) + x(dryTo)) / 2} y={m.t - 26} textAnchor="middle" style={{ fill: 'var(--ink-2)', fontWeight: 600 }}>
-                {narrow ? '24 dní bez dažďa' : 'tu pôda vysychá: 24 dní bez dažďa'}
+                {narrow ? t.dryShort : t.dryLong}
               </text>
             </g>
           )}
@@ -139,7 +191,7 @@ export function DataChart({ snapshot }) {
               <line x1={x(s.i)} x2={x(s.i)} y1={m.t - 6} y2={m.t + ph} stroke="var(--water)" strokeDasharray="3 4" opacity="0.6" />
               {(k === 0 || (!narrow && s.i - storms[k - 1].i > 3)) && (
                 <text x={x(s.i) + 4} y={m.t - 9} style={{ fill: 'var(--water)', fontWeight: 600 }}>
-                  {k === 0 ? `tu pršalo (${fmtNum(s.mm)} mm)` : `${fmtNum(s.mm)} mm`}
+                  {k === 0 ? t.rainHere(fmtNum(s.mm, 1, lang)) : `${fmtNum(s.mm, 1, lang)} mm`}
                 </text>
               )}
             </g>
@@ -165,21 +217,18 @@ export function DataChart({ snapshot }) {
             style={{ left: Math.min(width - 170, Math.max(0, x(idx) + 10)), top: 36 }}
             aria-live="polite"
           >
-            <b>{fmtDate(days[idx], { day: 'numeric', month: 'long' })}</b>
-            <div className="muted">dážď: {fmtNum(snapshot.rain_mm[idx])} mm</div>
+            <b>{fmtDate(days[idx], { day: 'numeric', month: 'long' }, lang)}</b>
+            <div className="muted">{t.rain}: {fmtNum(snapshot.rain_mm[idx], 1, lang)} mm</div>
             {nodes.filter((id) => shown[id]).map((id) => (
               <div key={id}>
                 <span className="dot" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9, background: NODE_META[id].color, marginRight: 6 }} />
-                {NODE_META[id].label}: <b>{fmtNum(snapshot.nodes[id].humidity[idx])} %</b>
+                {nodeLabel(id, lang)}: <b>{fmtNum(snapshot.nodes[id].humidity[idx], 1, lang)} %</b>
               </div>
             ))}
           </div>
         )}
       </div>
-      <p className="small muted" style={{ marginTop: 8 }}>
-        Denný medián vlhkosti pôdy (0 % = senzor na vzduchu, 100 % = senzor vo vode). Ťuknite alebo prejdite myšou
-        na graf, prípadne ho vyberte klávesom Tab a použite šípky.
-      </p>
+      <p className="small muted" style={{ marginTop: 8 }}>{t.note}</p>
     </div>
   )
 }
@@ -187,6 +236,8 @@ export function DataChart({ snapshot }) {
 // ----------------------------------------------------------------- forecast
 
 export function ForecastChart({ demo }) {
+  const lang = useLang()
+  const t = FORECAST_T[lang]
   const [ref, width] = useWidth()
   const n = demo.dates.length
   const H = 260
@@ -205,22 +256,22 @@ export function ForecastChart({ demo }) {
   return (
     <div>
       <div className="legend">
-        <span><span className="sw" style={{ background: 'var(--ink)' }} />meranie</span>
-        <span><span className="sw" style={{ background: 'var(--leaf)' }} />predpoveď modelu</span>
-        <span><span className="sw" style={{ background: 'var(--warn)', backgroundImage: 'none', opacity: 0.7 }} />„zostane to tak“ (baseline)</span>
+        <span><span className="sw" style={{ background: 'var(--ink)' }} />{t.measured}</span>
+        <span><span className="sw" style={{ background: 'var(--leaf)' }} />{t.model}</span>
+        <span><span className="sw" style={{ background: 'var(--warn)', backgroundImage: 'none', opacity: 0.7 }} />{t.baseline}</span>
       </div>
       <div className="chart" ref={ref}>
         <svg viewBox={`0 0 ${width} ${H}`} height={H} tabIndex={0} role="img"
-          aria-label={`Experimentálna predpoveď vysychania pre uzol ${demo.node} od ${fmtDate(demo.dates[0])} do ${fmtDate(demo.dates[n - 1])}: model spustený z prvého merania, porovnaný s meraním a s odhadom, že vlhkosť zostane rovnaká.`}
+          aria-label={t.aria(demo.node, fmtDate(demo.dates[0], shortDate(lang), lang), fmtDate(demo.dates[n - 1], shortDate(lang), lang))}
           {...handlers}>
           {ticks.map((v) => (
             <g key={v}>
               <line className="grid-line" x1={m.l} x2={width - m.r} y1={y(v)} y2={y(v)} />
-              <text x={m.l - 6} y={y(v) + 4} textAnchor="end">{fmtNum(v, 0)} %</text>
+              <text x={m.l - 6} y={y(v) + 4} textAnchor="end">{fmtNum(v, 0, lang)} %</text>
             </g>
           ))}
           {demo.dates.map((d, i) => (i % 3 === 0 || (i === n - 1 && i % 3 === 2)) && (
-            <text key={d} x={x(i)} y={H - 8} textAnchor="middle">{fmtDate(d)}</text>
+            <text key={d} x={x(i)} y={H - 8} textAnchor="middle">{fmtDate(d, shortDate(lang), lang)}</text>
           ))}
           <line x1={m.l} x2={width - m.r} y1={y(demo.persistence)} y2={y(demo.persistence)} stroke="var(--warn)" strokeWidth="2" strokeDasharray="6 5" opacity="0.8" />
           <path d={linePath(demo.model, x, y)} fill="none" stroke="var(--leaf)" strokeWidth="3" strokeLinecap="round" />
@@ -230,10 +281,10 @@ export function ForecastChart({ demo }) {
         </svg>
         {idx != null && (
           <div className="chart-tip" style={{ left: Math.min(width - 170, Math.max(0, x(idx) + 10)), top: 20 }} aria-live="polite">
-            <b>{fmtDate(demo.dates[idx], { day: 'numeric', month: 'long' })}</b> (deň {idx})
-            <div>meranie: <b>{fmtNum(demo.measured[idx])} %</b></div>
-            <div>model: <b>{fmtNum(demo.model[idx])} %</b></div>
-            <div>„zostane to tak“: <b>{fmtNum(demo.persistence)} %</b></div>
+            <b>{fmtDate(demo.dates[idx], { day: 'numeric', month: 'long' }, lang)}</b> ({t.day} {idx})
+            <div>{t.measured}: <b>{fmtNum(demo.measured[idx], 1, lang)} %</b></div>
+            <div>model: <b>{fmtNum(demo.model[idx], 1, lang)} %</b></div>
+            <div>{t.persistence}: <b>{fmtNum(demo.persistence, 1, lang)} %</b></div>
           </div>
         )}
       </div>

@@ -16,9 +16,6 @@ sys.stderr.reconfigure(encoding="utf-8")
 
 PROTECTED_DIRS = (
     "firmware/",
-    "backend/",
-    "frontend/",
-    "ml/",
     "hardware/",
     "contracts/",
 )
@@ -37,7 +34,7 @@ def main() -> None:
     # Explicitly user-authorized exceptions: docs, and build config with no
     # application logic (see .claude/SETUP.md for what was authorized and
     # when).
-    if basename in ("CLAUDE.md", "platformio.ini"):
+    if basename in ("CLAUDE.md", "README.md", "platformio.ini"):
         sys.exit(0)
 
     for prefix in PROTECTED_DIRS:

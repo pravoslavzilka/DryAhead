@@ -1,4 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
+
+// Page language for the shared presentation components: 'sk' on /blue (the
+// default), 'en' on /about. Components look up their strings with useLang().
+export const LangContext = createContext('sk')
+export const useLang = () => useContext(LangContext)
+const LOCALES = { sk: 'sk-SK', en: 'en-GB' }
+export const localeOf = (lang) => LOCALES[lang] ?? LOCALES.sk
+
+/** Fixed decimals with the language's decimal separator (comma in Slovak). */
+export function fmtDec(v, decimals, lang) {
+  const s = v.toFixed(decimals)
+  return lang === 'en' ? s : s.replace('.', ',')
+}
 
 export function useReducedMotion() {
   const [reduced, setReduced] = useState(
@@ -53,10 +66,11 @@ export function Reveal({ as: Tag = 'div', className = '', children, ...rest }) {
   )
 }
 
-/** Number that counts up when it scrolls into view. `decimals` uses a Slovak comma. */
+/** Number that counts up when it scrolls into view. `decimals` uses the page language's separator. */
 export function Counter({ to, decimals = 0, prefix = '', suffix = '', duration = 1400 }) {
   const [ref, inView] = useInView()
   const reduced = useReducedMotion()
+  const lang = useLang()
   const [value, setValue] = useState(reduced ? to : 0)
   useEffect(() => {
     if (!inView) return
@@ -71,19 +85,20 @@ export function Counter({ to, decimals = 0, prefix = '', suffix = '', duration =
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [inView, reduced, to, duration])
-  const text = value.toFixed(decimals).replace('.', ',')
+  const text = fmtDec(value, decimals, lang)
   return (
     <span ref={ref}>
-      <span className="visually-hidden">{prefix}{to.toFixed(decimals).replace('.', ',')}{suffix}</span>
+      <span className="visually-hidden">{prefix}{fmtDec(to, decimals, lang)}{suffix}</span>
       <span aria-hidden="true">{prefix}{text}{suffix}</span>
     </span>
   )
 }
 
 export function Source({ href, children }) {
+  const lang = useLang()
   return (
     <span className="source">
-      Zdroj: <a href={href} target="_blank" rel="noopener noreferrer">{children ?? new URL(href).hostname.replace('www.', '')}</a>
+      {lang === 'en' ? 'Source:' : 'Zdroj:'} <a href={href} target="_blank" rel="noopener noreferrer">{children ?? new URL(href).hostname.replace('www.', '')}</a>
     </span>
   )
 }
@@ -94,6 +109,7 @@ export function Fill({ children }) {
 }
 
 export function ThemeToggle() {
+  const lang = useLang()
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? null)
   const systemDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
   const dark = theme ? theme === 'dark' : systemDark
@@ -104,7 +120,9 @@ export function ThemeToggle() {
     setTheme(next)
   }
   return (
-    <button className="icon-btn" onClick={toggle} aria-label={dark ? 'Prepnúť na svetlý režim' : 'Prepnúť na tmavý režim'}>
+    <button className="icon-btn" onClick={toggle} aria-label={lang === 'en'
+      ? (dark ? 'Switch to light mode' : 'Switch to dark mode')
+      : (dark ? 'Prepnúť na svetlý režim' : 'Prepnúť na tmavý režim')}>
       {dark ? (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <circle cx="12" cy="12" r="4.5" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" strokeLinecap="round" />
@@ -118,6 +136,6 @@ export function ThemeToggle() {
   )
 }
 
-export function fmtDate(iso, opts = { day: 'numeric', month: 'numeric' }) {
-  return new Date(`${iso}T12:00:00`).toLocaleDateString('sk-SK', opts)
+export function fmtDate(iso, opts = { day: 'numeric', month: 'numeric' }, lang = 'sk') {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString(localeOf(lang), opts)
 }

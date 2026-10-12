@@ -6,8 +6,9 @@ DryAhead measures soil moisture in the field, carries it over long-range LoRa ra
 cloud database, and shows it on a live dashboard. The eventual goal is to fuse those
 readings with weather forecasts to predict drought stress *before* it happens — the name
 says the goal: see the dry conditions **ahead** of time, while there's still time to act.
-That predictive layer is still being designed; what exists today is the sensing and
-delivery pipeline it depends on, deployed and running in the field.
+A first working forecast is live on the dashboard for nodes 1, 4 and 5: when each spot
+reaches plant stress if no rain falls, plus a with-forecast-rain line — see
+[The model](#the-model).
 
 Live dashboard: **[dryahead.com](https://dryahead.com/)**
 
@@ -16,22 +17,51 @@ Live dashboard: **[dryahead.com](https://dryahead.com/)**
 ## Field deployment
 
 Five nodes and a hub have been running unattended near Zaježová (Pliešovce, Slovakia)
-since **2026-06-29**, across five points within a 500 m radius. As of **2026-09-06** (69
-days in):
+since **2026-06-29**, across five points within a 500 m radius. As of **2026-10-12**
+(105 days in), Supabase holds **42,003 readings** from the five nodes:
 
-| Node | Status | Delivered slots | Delivery rate |
-|------|--------|-----------------:|---------------:|
-| 1 | in operation | 3,572 / 4,998 | 71.5% |
-| 2 | **dead** — solder fault kept it out of deep sleep, drained the battery, damaged further during a repair attempt | 389 / 2,904 | 13.4% |
-| 3 | **silent since 2026-09-01** — water ingress in the antenna chamber degraded the radio link below the hub's decode threshold | 1,993 / 4,668 | 42.7% |
-| 4 | in operation | 4,093 / 4,998 | 81.9% |
-| 5 | in operation | 4,107 / 4,999 | 82.2% |
-| **Total** | | **14,154 / 22,567** | **62.7%** |
+| Node | Status | Days with data | Delivered slots | Delivery rate |
+|------|--------|---------------:|----------------:|--------------:|
+| 1 | in operation | 106 | 6,121 / 7,595 | 80.6% |
+| 2 | **rebuilt, in operation since 2026-10-11** — node 2's body with node 3's reprogrammed board (see below) | 12 | 469 / 7,595 | 6.2% |
+| 3 | **retired** — last field reading 2026-09-10; water in the antenna chamber stopped transmission. Its board now runs node 2 | 46 | 2,598 / 7,595 | 34.2% |
+| 4 | in operation | 106 | 6,624 / 7,595 | 87.2% |
+| 5 | in operation — battery ran out 2026-10-05, replaced 10-11 | 101 | 6,196 / 7,595 | 81.6% |
+| **Total** | | | **22,008 / 37,975** | **58.0%** |
 
-The two nodes without a hardware fault (4 and 5) deliver ~83%, so the network's ceiling is
+A *slot* is one 20-minute reading interval; the denominator is every slot from the first
+reading (2026-06-29) to 2026-10-12, the same for every node. Row counts run at about twice
+the slot counts because nodes 1, 4 and 5 log two readings 8–13 s apart in most slots (a
+double wake per cycle, still to be fixed in firmware) — analysis code dedupes per slot.
+
+**Node history.**
+
+- **Node 2 (original):** a bad solder joint from the build kept the ESP32 from entering deep
+  sleep, so it drained its battery. It went silent on 2026-08-08, and the repair attempt
+  permanently destroyed its ESP32 board.
+- **Node 3:** poor sealing of the antenna chamber let water droplets in, and the
+  contamination stopped it transmitting. Its last field reading was 2026-09-10. The board
+  itself still worked.
+- **Node 2 (rebuilt):** node 3's board, reprogrammed as node 2, was fitted into node 2's
+  body. It has been reporting since 2026-10-11 17:33 UTC, so rows for node 2 before
+  2026-08-08 come from the old board. Its timestamps look healthy so far: 1 of its first 153
+  readings has epoch 0.
+- **Node 5:** its battery ran out on 2026-10-05 (last reading 06:00 UTC). After a new
+  battery it was back on 2026-10-11 at 17:39 UTC.
+
+The nodes without a hardware fault (1, 4, 5) deliver 81–87%, so the network's ceiling is
 set by enclosure/mechanical reliability, not the radio link or cloud stack — LoRa RSSI held
-between −95 and −97 dBm with no observed distance dependence within 1 km. Root CLAUDE.md
-tracks this as "4 LoRa nodes live in the field" — node 2 is no longer recoverable.
+between −95 and −97 dBm with no observed distance dependence within 1 km.
+
+**Manual recovery from a node's flash (node 3, 2026-10-11).** Before node 3's board was
+reprogrammed as the new node 2, its full local log (10,075 readings, 06-29 → 10-11) was
+pulled over USB with
+`tools/node_log_dump/` and cleaned before upload: the 8–13 s double readings were merged
+per slot and every slot already in Supabase was dropped, leaving **505 new readings**
+(mostly 07-26 → 08-05 and 09-09/10) inserted as `is_backlog = true`. A further 4,889 readings
+weren't uploaded because they have no usable timestamp: from late July the node's DS3231
+stopped answering around midday (roughly 10:00–18:00 UTC) and was almost completely dead
+from 08-06, so those readings carry epoch 0. See [`tools/`](#repository-structure).
 
 The hub also recovers missed readings after connectivity outages via `GETDATA` requests
 (see `backend/reconciliation/`). In the one outage tested against so far (59.6 h in
@@ -56,8 +86,9 @@ not yet a calibrated volumetric-moisture percentage.
 | Backend (`backend/`) | FastAPI stub (`/health` only) — the hub currently writes straight to Supabase, bypassing this service |
 | Reconciliation (`backend/reconciliation/`) | Working, standalone script; recovers backfill after connectivity gaps |
 | Database | Supabase-managed PostgreSQL, live: `readings`, `hub_status`, `instructions` tables |
-| Frontend (`frontend/`) | Live dashboard — map, sensor cards, detail charts, hub status, deployed to Vercel |
-| Model (`ml/`) | Physically-based bucket model pipeline built and run against live data; not yet beating a persistence baseline — data-volume problem (~2 months live), not a physics problem. See `ml/option_one/README.md`. |
+| Frontend (`frontend/`) | Live dashboard — map, sensor cards, detail charts, hub status, drought forecast (nodes 1/4/5); English project page at `/about/` (description, results, history) and the Slovak Blue Challenge page at `/blue/`; deployed to Vercel |
+| Model (`ml/`) | **Working drying + wetting models for nodes 1, 4, 5**, beating persistence at 7 days on every node; running live in the dashboard as a plant-stress forecast. The original combined bucket model still loses to persistence. See [The model](#the-model). |
+| Node data recovery (`tools/`) | Pulls a node's LittleFS log over USB (sketch or read-only esptool script); used to backfill node 3 |
 | Hardware (`hardware/`) | No KiCad sources committed yet — design lives in the deployed prototype and `hardware/bom.csv` |
 | CI (`.github/workflows/`) | Firmware CI is real (`pio run` per sketch); backend/frontend/ml workflows are still placeholders |
 
@@ -112,6 +143,10 @@ dryahead/
 ├── backend/              FastAPI service + the reconciliation/ backfill script
 ├── ml/                   Drought-model research (option_one/: FAO-56 bucket model)
 ├── frontend/             The live dashboard (React + Vite, plain JS/JSX)
+├── tools/                Bench tools: pull a node's stored log over USB
+│   ├── node_log_dump/        Arduino IDE sketch — flash temporarily, dumps LittleFS over serial
+│   └── pull_node_log.py      Read-only alternative via esptool (no reflash)
+├── node_dumps/           Raw logs pulled off nodes, plus what was uploaded from them
 └── infra/                Placeholder — no containerized/deployed workflow yet
 ```
 
@@ -173,15 +208,37 @@ weather forecast, and field readings are used to correct and anchor it to real l
 conditions via data assimilation — a forecast alone doesn't know a specific plot's soil
 state, and a sensor alone can't see the future.
 
-That layer isn't running yet. The first candidate, `ml/option_one/` — a physically-based
-FAO-56 root-zone bucket model, calibrated per node with differential evolution and scored
-by KGE against a persistence baseline — has been built and run against the live Supabase
-data. As of the last run (2026-09-03) it loses to the persistence baseline at every
-forecast horizon on every node. That's read as a data-volume problem, not a sign the
-physics is wrong: the live record is only ~2 months deep (node 2 effectively 8 days) against
-9 free parameters, and a synthetic two-year test of the same pipeline recovers known
-parameters cleanly. See `ml/option_one/README.md` for the full methodology and
-`docs/model-design/README.md` for how it fits the broader forecast-primary design.
+A first version runs today, built in `ml/option_one/` for nodes 1, 4 and 5 and split
+into two physically-based models fitted per node on raw sensor counts, with the local
+meteotekov weather station as ground truth:
+
+- **Drying model** (`drydown.py`) — how the reading rises (dries) between wettings: drainage
+  above field capacity, then stress-limited evapotranspiration from station Penman-Monteith
+  ET0. Five parameters per node.
+- **Wetting model** (`wetting.py`) — how far the reading drops when rain falls: a top-layer
+  store for node 4 (first ~4.4 mm held, then ~98 counts/mm), linear for node 5 (~11 counts/mm).
+  Node 1 doesn't respond predictably to station rain, so it has no wetting model.
+
+Held-out 7-day RMSE in raw counts (fitted 2026-07-01 → 09-25, validation from 08-30;
+5–9 forecasts per node, so indicative):
+
+| Node | Drying model | Persistence | Average drift |
+|------|-------------:|------------:|--------------:|
+| 1 | **9.5** | 14.9 | 26.6 |
+| 4 | **8.6** | 59.4 | 69.5 |
+| 5 | **8.0** | 47.5 | 20.7 |
+
+The drying model beats both baselines on every node. The dashboard runs both models in the
+browser (`frontend/src/lib/droughtForecast.js`, parameters exported to
+`frontend/src/data/droughtModel.json`) on Open-Meteo's 16-day forecast. Each sensor card
+shows when the node reaches **plant stress** if no rain falls, and the detail modal adds a
+with-forecast-rain line.
+
+Caveats: fitted on summer only, so autumn/winter drying is extrapolation, and the models
+should be refitted as the record grows. The original combined FAO-56 bucket model
+(`run_pipeline.py`) is kept as a baseline; it still loses to persistence. See
+`ml/option_one/README.md` for the full methodology and `docs/model-design/README.md` for
+how it fits the broader forecast-primary design.
 
 ---
 
@@ -208,21 +265,26 @@ Priorities below come directly from what the field deployment surfaced, not hypo
 features:
 
 1. **Seal the enclosure properly** — IP67 with cable glands and a gasketed antenna
-   feedthrough. Node 3's failure (water in the antenna chamber) and node 2's (a solder
-   fault that only showed up in the field) were the two real hardware failures in 69 days;
-   mechanical/build quality is the weakest link so far, not firmware, radio, or cloud.
-2. **Migrate the wire format** to `contracts/telemetry.md`'s packed-byte layout, with a
+   feedthrough, plus a checked solder/assembly step before deployment. The two real hardware
+   failures in 105 days were both build-quality problems. Node 3's antenna chamber let water
+   in, which stopped transmission. Node 2's bad solder joint kept it out of deep sleep, and
+   the repair destroyed the board. Node 3's DS3231 dropping out in the midday heat points
+   the same way. Mechanical/build quality is the weakest link so far, not firmware, radio
+   or cloud.
+2. **Fix the double wake per cycle** — nodes log two readings 8–13 s apart in most
+   20-minute slots, doubling flash use and radio time for no extra information.
+3. **Migrate the wire format** to `contracts/telemetry.md`'s packed-byte layout, with a
    golden fixture shared by firmware and backend (see `telemetry-contract`).
-3. **Wire the FastAPI backend into the live ingestion path** — today the hub writes to
+4. **Wire the FastAPI backend into the live ingestion path** — today the hub writes to
    Supabase directly; the backend only exposes `/health`.
-4. **Add a firmware diagnostic channel** (battery voltage, reset reason, sensor health) —
+5. **Add a firmware diagnostic channel** (battery voltage, reset reason, sensor health) —
    node 2's slow drain and RTC resets would have been visible in days instead of only
    after failure.
-5. **Extend node local-storage retention** past 14 days, since the one tested outage lost
+6. **Extend node local-storage retention** past 14 days, since the one tested outage lost
    77% of its missed readings once reconciliation ran later than that window.
-6. **Volumetric sensor calibration** against a reference method, per soil type — current
+7. **Volumetric sensor calibration** against a reference method, per soil type — current
    readings track relative change only.
-7. **Second deployment site** with a different soil type, to give the model something to
+8. **Second deployment site** with a different soil type, to give the model something to
    generalize across before data-driven modelling is worth attempting.
 
 ---

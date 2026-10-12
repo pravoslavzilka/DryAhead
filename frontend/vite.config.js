@@ -16,34 +16,37 @@ function siteUrlPlugin() {
   }
 }
 
-// Vite's dev/preview servers only serve the presentation at /blue/ and send
-// /blue to the dashboard; redirect so /blue works locally too. On Vercel,
-// vercel.json's rewrite handles it.
-function blueSlashPlugin() {
+// Vite's dev/preview servers only serve the static pages at /blue/ and
+// /about/ and send /blue, /about to the dashboard; redirect so they work
+// locally too. On Vercel, vercel.json's rewrites handle it.
+const STATIC_PAGES = ['/blue', '/about']
+function trailingSlashPlugin() {
   const redirect = (req, res, next) => {
     const [path, query] = req.url.split('?')
-    if (path !== '/blue') return next()
+    if (!STATIC_PAGES.includes(path)) return next()
     res.statusCode = 301
-    res.setHeader('Location', `/blue/${query ? `?${query}` : ''}`)
+    res.setHeader('Location', `${path}/${query ? `?${query}` : ''}`)
     res.end()
   }
   return {
-    name: 'blue-trailing-slash',
+    name: 'static-page-trailing-slash',
     configureServer: (server) => { server.middlewares.use(redirect) },
     configurePreviewServer: (server) => { server.middlewares.use(redirect) },
   }
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), siteUrlPlugin(), blueSlashPlugin()],
+  plugins: [react(), tailwindcss(), siteUrlPlugin(), trailingSlashPlugin()],
   build: {
     rollupOptions: {
-      // Two pages: the dashboard (/) and the Blue Challenge presentation
-      // (/blue/), a static page with its own small bundle and no Supabase
-      // dependency, so it keeps working if the backend is down.
+      // Three pages: the dashboard (/), the Blue Challenge presentation
+      // (/blue/, Slovak) and the project about page (/about/, English). The
+      // last two are static pages with their own small bundles and no
+      // Supabase dependency, so they keep working if the backend is down.
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         blue: resolve(import.meta.dirname, 'blue/index.html'),
+        about: resolve(import.meta.dirname, 'about/index.html'),
       },
     },
   },

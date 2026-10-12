@@ -7,22 +7,16 @@ import WeatherStrip from './components/WeatherStrip'
 import HubStatusCard from './components/HubStatusCard'
 import ReceptionActivity from './components/ReceptionActivity'
 import InstructionsWidget from './components/InstructionsWidget'
-import AboutPage from './components/AboutPage'
 import { timeAgo } from './lib/format'
 
 export default function App() {
   const { sensors, loading, error, lastUpdated, refresh } = useSensorData()
   const [selected, setSelected] = useState(null)
-  const [view, setView] = useState(() => (window.location.hash === '#about' ? 'about' : 'dashboard'))
 
-  const showAbout = () => {
-    setView('about')
-    history.replaceState(null, '', '#about')
-  }
-  const showDashboard = () => {
-    setView('dashboard')
-    history.replaceState(null, '', ' ')
-  }
+  // The about page moved from #about to its own page at /about/.
+  useEffect(() => {
+    if (window.location.hash === '#about') window.location.replace('/about/')
+  }, [])
 
   // Deep link: #sensor-3 opens that sensor's detail modal once data is in.
   useEffect(() => {
@@ -38,10 +32,6 @@ export default function App() {
   }
 
   const alerts = sensors.filter((s) => s.status === 'critical')
-
-  if (view === 'about') {
-    return <AboutPage onBack={showDashboard} />
-  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -59,12 +49,12 @@ export default function App() {
           <span className="text-xs text-stone-400">
             {lastUpdated ? `Refreshed ${timeAgo(lastUpdated)}` : ''}
           </span>
-          <button
-            onClick={showAbout}
+          <a
+            href="/about/"
             className="text-sm font-medium text-stone-500 hover:text-orange-700"
           >
             About
-          </button>
+          </a>
           <a
             href="https://github.com/pravoslavzilka/DryAhead"
             target="_blank"

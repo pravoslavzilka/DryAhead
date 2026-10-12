@@ -38,8 +38,31 @@ here — never the service_role key.
   `backend/reconciliation/` has queued or resolved.
 - **Weather strip** (`WeatherStrip`): local forecast context alongside the
   sensor readings.
-- **About page**: project background for a visitor landing on the dashboard
-  cold.
+- **Drought forecast** (nodes 1, 4, 5): each sensor card shows when the node
+  reaches **plant stress** if no rain falls ("Plant stress in ~N d"); the detail
+  modal's "Show drought forecast" adds a no-rain line and a with-forecast-rain
+  line. Runs in the browser (`src/lib/droughtForecast.js`, a port of
+  `ml/option_one`'s drying + wetting models) on Open-Meteo's 16-day forecast
+  (`src/hooks/useDroughtWeather.js`). Parameters come from
+  `src/data/droughtModel.json`. After refitting, regenerate it with
+  `ml/option_one/export_frontend_model.py` and rebuild.
+- **About page** (`/about/`, `about/index.html` + `src/about/`): the full
+  project in English. It covers the problem, how the system works, the field
+  results (moisture chart, findings, delivery per node), the forecast model
+  and its scores, the deployment history and next steps. It's a third Vite
+  entry built like `/blue/`, reusing its components and CSS. Charts read
+  `src/about/snapshot.json` (`ml/option_one/export_presentation_snapshot.py
+  --out ../../frontend/src/about/snapshot.json`), and delivery numbers and
+  history live in `src/about/deployment.js`, maintained by hand. Update both
+  together. The dashboard's About link goes here, and old `/#about` links
+  redirect to it.
+- **Presentation page** (`/blue/`, `blue/index.html` + `src/blue/`): the Blue
+  Challenge presentation (Slovak), built as a second Vite entry with its own
+  bundle. It reads only a static snapshot (`src/blue/snapshot.json`, written by
+  `ml/option_one/export_presentation_snapshot.py`), so it works with Supabase
+  down. `vercel.json` rewrites `/blue` to it. The shared components in
+  `src/blue/` take their language from `LangContext` in `src/blue/ui.jsx`:
+  Slovak by default, English when `/about/` provides `'en'`.
 - Data auto-refreshes every 5 minutes (sensors report every ~20 min).
 
 ## Data handling notes

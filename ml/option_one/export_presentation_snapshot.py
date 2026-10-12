@@ -11,10 +11,15 @@ Prints the findings so they can be checked before they go on the page.
 
 Run: `python export_presentation_snapshot.py` (needs .env and outputs/ from
 run_drydown.py). Re-run and rebuild to refresh the page's data.
+
+The English about page (frontend/about/, served at /about) uses the same
+format from its own file, so each page can be refreshed on its own:
+`python export_presentation_snapshot.py --out ../../frontend/src/about/snapshot.json`
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -37,6 +42,10 @@ MIN_READINGS_PER_DAY = 20
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--out", default=TARGET, help="output JSON path (default: the /blue page's snapshot)")
+    target = parser.parse_args().out
+
     url, key = data_supabase.load_credentials(os.path.join(HERE, ".env"))
     cal = data_supabase.fetch_calibration(url, key)
     all_rows = data_supabase.dedupe_readings(data_supabase.filter_valid_nodes(data_supabase.fetch_readings(url, key)))
@@ -135,12 +144,12 @@ def main() -> int:
         "scores_7d_pp": scores,
         "findings": findings,
     }
-    os.makedirs(os.path.dirname(TARGET), exist_ok=True)
-    with open(TARGET, "w") as f:
+    os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
+    with open(target, "w") as f:
         json.dump(out, f, separators=(",", ":"))
     print(json.dumps({k: out[k] for k in ("total_measurements", "first_measurement", "scores_7d_pp", "findings")}, indent=2))
     print(f"demo: node 4 {demo['dates'][0]}..{demo['dates'][-1]}")
-    print(f"wrote {os.path.normpath(TARGET)} ({os.path.getsize(TARGET) / 1024:.1f} KB)")
+    print(f"wrote {os.path.normpath(target)} ({os.path.getsize(target) / 1024:.1f} KB)")
     return 0
 
 
