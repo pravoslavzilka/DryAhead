@@ -38,8 +38,21 @@ here — never the service_role key.
   `backend/reconciliation/` has queued or resolved.
 - **Weather strip** (`WeatherStrip`): local forecast context alongside the
   sensor readings.
+- **Drought forecast** (nodes 1, 4, 5): each sensor card shows when the node
+  reaches **plant stress** if no rain falls ("Plant stress in ~N d"); the detail
+  modal's "Show drought forecast" adds a no-rain line and a with-forecast-rain
+  line. Runs in the browser (`src/lib/droughtForecast.js`, a port of
+  `ml/option_one`'s drying + wetting models) on Open-Meteo's 16-day forecast
+  (`src/hooks/useDroughtWeather.js`). Parameters come from
+  `src/data/droughtModel.json`. After refitting, regenerate it with
+  `ml/option_one/export_frontend_model.py` and rebuild.
 - **About page**: project background for a visitor landing on the dashboard
   cold.
+- **Presentation page** (`/blue/`, `blue/index.html` + `src/blue/`): the Blue
+  Challenge presentation (Slovak), built as a second Vite entry with its own
+  bundle. It reads only a static snapshot (`src/blue/snapshot.json`, written by
+  `ml/option_one/export_presentation_snapshot.py`), so it works with Supabase
+  down. `vercel.json` rewrites `/blue` to it.
 - Data auto-refreshes every 5 minutes (sensors report every ~20 min).
 
 ## Data handling notes

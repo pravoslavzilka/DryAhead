@@ -11,7 +11,8 @@ is `.jsx`/`.js`. Trust the code over that README line.
 - No test framework installed (no Vitest/Jest/Playwright), no ESLint
   config, no Prettier config.
 - Deployed to Vercel from this subdirectory via the Vercel dashboard's
-  Root Directory setting — there is no `vercel.json` in-repo confirming
-  this; it's UNVERIFIED from the repo alone.
+  Root Directory setting. `vercel.json` here only holds the `/blue` →
+  `/blue/index.html` rewrite for the presentation page (a second Vite
+  entry, see `vite.config.js`).
 - `.env` holds only the Supabase **anon** key and is gitignored — never the
   `service_role` key, never commit it even temporarily.
