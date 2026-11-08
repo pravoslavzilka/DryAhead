@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 
 // Zaježová, Slovensko — coordinates of the meteotekov.sk/@zajezova station.
-const LAT = 48.453782
-const LON = 19.216477
+export const LAT = 48.453782
+export const LON = 19.216477
 const REFRESH_MS = 15 * 60 * 1000
 
 const WEATHER_URL =

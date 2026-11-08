@@ -98,3 +98,18 @@ MIN_VALIDATION_DAYS = 10
 MIN_SCORE_DAYS = 15
 
 CACHE_DIR = "outputs"
+
+# --- Drying model (drydown.py / run_drydown.py) -----------------------------
+# Nodes 1/4/5 only: the ones with the full record since installation.
+MODEL_NODE_IDS = (1, 4, 5)
+
+# All three sensors jump 360-830 counts in the first hours after installation
+# on 2026-06-29 (settling into the soil) -- modelling starts after that.
+DRYDOWN_START = "2026-07-01"
+
+# Days are station-local, matching the meteotekov station's own day boundary.
+LOCAL_TZ = "Europe/Bratislava"
+
+# Station altitude for FAO-56 clear-sky radiation. The station's own isn't
+# published; this is Open-Meteo's elevation for LAT/LON.
+STATION_ELEVATION_M = 599.0

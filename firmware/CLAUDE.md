@@ -17,9 +17,10 @@ user's explicit go-ahead — a bad flash is expensive to fix in the field.
   ESP32's internal RTC, corrected by hub `TIME:` messages — not interchangeable.
 
 ## State, not aspiration
-- Build system is **plain Arduino IDE sketches** — there is no
-  `platformio.ini`. The `justfile`'s `fw-build` and `.github/workflows/
-  firmware.yml` both call `pio run`, which currently fails.
+- Sketches are built with the Arduino IDE. Each sketch folder
+  (`hub/`, `nodes/node_with_rtc/`, `nodes/node_no_rtc/`) also has its own
+  `platformio.ini` for `pio run`. PlatformIO isn't installed on the dev
+  machine, so the CLI build hasn't been verified here.
 - Wire format today is CSV-ish text (`node_id,raw,temperature,epoch,
   L:<0|1>`), **not** the packed-byte layout in `contracts/telemetry.md`.
   Don't assume the contract doc describes what's on the air right now.

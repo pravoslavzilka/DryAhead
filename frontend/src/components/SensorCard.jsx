@@ -1,6 +1,45 @@
 import { ResponsiveContainer, AreaChart, Area, YAxis, ReferenceLine } from 'recharts'
 import { STATUS_META } from '../lib/calibration'
 import { timeAgo, fmtPct, fmtTemp } from '../lib/format'
+import { nodeModel, currentRaw, forecastNode } from '../lib/droughtForecast'
+import { useDroughtWeather } from '../hooks/useDroughtWeather'
+
+const DAY_MS = 86400000
+
+/** Small label: when this node reaches plant stress if no rain falls. */
+function DroughtLabel({ sensor }) {
+  const modelled = nodeModel(sensor.nodeId) != null && sensor.status !== 'stale'
+  const { weather } = useDroughtWeather(modelled)
+  if (!modelled || !weather) return null
+  const x0 = currentRaw(sensor.history)
+  const f = forecastNode(sensor.nodeId, x0, sensor.latest?.t, weather.days, weather.todayIdx, { withRain: false })
+  if (!f) return null
+
+  const horizonDays = weather.days.length - weather.todayIdx
+  let text, cls
+  if (f.stressedNow) {
+    text = 'Plant stress now'
+    cls = 'bg-red-100 text-red-700 border-red-200'
+  } else if (f.stressAt != null) {
+    const days = Math.max(1, Math.round((f.stressAt - Date.now()) / DAY_MS))
+    const date = new Date(f.stressAt).toLocaleDateString([], { day: 'numeric', month: 'short' })
+    text = `Plant stress in ~${days} d (${date}) if no rain`
+    cls = days <= 3 ? 'bg-red-100 text-red-700 border-red-200'
+      : days <= 7 ? 'bg-orange-100 text-orange-700 border-orange-200'
+        : 'bg-amber-50 text-amber-700 border-amber-200'
+  } else {
+    text = `No plant stress within ${horizonDays} d, even without rain`
+    cls = 'bg-stone-50 text-stone-500 border-stone-200'
+  }
+  return (
+    <span
+      className={`self-start rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}
+      title="Drought forecast: this node's fitted drying model driven by the Open-Meteo 16-day forecast, assuming no rain. Plant stress = soil dry enough that plants struggle to take up water."
+    >
+      {text}
+    </span>
+  )
+}
 
 function AlertIcon() {
   return (
@@ -48,6 +87,8 @@ export default function SensorCard({ sensor, onSelect }) {
         </span>
         <span className="text-[11px] text-stone-400">soil humidity</span>
       </div>
+
+      <DroughtLabel sensor={sensor} />
 
       <div className="h-16">
         {spark.length > 1 ? (

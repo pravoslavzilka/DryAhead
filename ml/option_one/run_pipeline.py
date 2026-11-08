@@ -1,5 +1,5 @@
 """End-to-end pipeline: confirm Supabase access -> pull + dedupe readings ->
-pull matching Open-Meteo history -> calibrate per node (pooling Kc/p) ->
+pull matching weather (station rain, Open-Meteo ET0) -> calibrate per node ->
 validate against persistence on the held-out tail -> equifinality check ->
 ensemble forecast -> AWF drought index. Run with `python run_pipeline.py`.
 """
@@ -10,12 +10,14 @@ import argparse
 import json
 import os
 import sys
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
 
 import data_supabase
 import data_weather
+import meteotekov
 from calibrate import align_series, calibrate_all, check_equifinality
 from config import CACHE_DIR, CALIBRATION_FRACTION, NODE_IDS
 from config import SPINUP_DAYS as CFG_SPINUP
@@ -38,6 +40,12 @@ def main() -> int:
         help="Share Kc/p across all nodes (median of independent fits). Off by default -- "
              "only correct if every node genuinely sits under the same vegetation type.",
     )
+    parser.add_argument(
+        "--rain-source", choices=("station", "open-meteo"), default="station",
+        help="Calibration rain: the meteotekov.sk Zajezova station (default; Open-Meteo fills days it "
+             "doesn't cover) or Open-Meteo only. ET0 and the forecast always come from Open-Meteo.",
+    )
+    parser.add_argument("--no-scrape", action="store_true", help="Use the station database as-is; don't fetch missing days.")
     args = parser.parse_args()
 
     env_path = os.path.join(HERE, ".env")
@@ -65,7 +73,10 @@ def main() -> int:
 
     print(f"=== Step 3/6: pulling Open-Meteo historical weather ({start} to {end}) ===")
     weather = data_weather.fetch_historical_daily(start, end)
-    print(f"  {len(weather)} days of rain_mm / et0_mm\n")
+    print(f"  {len(weather)} days of rain_mm / et0_mm")
+    if args.rain_source == "station":
+        weather = _use_station_rain(weather, scrape=not args.no_scrape)
+    print()
 
     node_data = {}
     for node_id, proxy in daily_proxy.items():
@@ -160,6 +171,24 @@ def main() -> int:
     _write_outputs(calibration, validation, equifinality, forecasts)
     print(f"\nWrote fitted parameters, validation report and forecast summaries to {os.path.join(HERE, CACHE_DIR)}/")
     return 0
+
+
+def _use_station_rain(weather: pd.DataFrame, scrape: bool = True) -> pd.DataFrame:
+    """Replace Open-Meteo rain_mm with station-measured rain wherever the
+    station database covers the UTC day; Open-Meteo fills the rest."""
+    first, last = weather.index.min().date(), weather.index.max().date()
+    if scrape:
+        # +1 day: UTC day `last` ends at 01:00/02:00 local on the next local day.
+        print(f"  fetching any missing station days ({first} to {last + timedelta(days=1)})...")
+        meteotekov.scrape(first, last + timedelta(days=1), meteotekov.DEFAULT_DB)
+
+    station = meteotekov.daily_rain_utc(first, last)
+    weather = weather.copy()
+    for day, mm in station.items():
+        weather.loc[pd.Timestamp(day), "rain_mm"] = mm
+    n_fallback = len(weather) - len(station)
+    print(f"  rain_mm: {len(station)} days from the station, {n_fallback} from Open-Meteo (station not covering them)")
+    return weather
 
 
 def _round(params: dict, digits: int = 3) -> dict:

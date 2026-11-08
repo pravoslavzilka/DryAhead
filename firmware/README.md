@@ -1,9 +1,17 @@
 # firmware
 
 The code that runs on the ESP32 boards (see `hardware/circuit/` for the board they run on): the
-field sensor nodes and the base-station hub that collects their LoRa transmissions. Built as
-plain **Arduino IDE sketches** — each sketch lives in its own folder named identically to its
-`.ino` file, which is what the Arduino toolchain requires to open/compile it.
+field sensor nodes and the base-station hub that collects their LoRa transmissions. **Live on 4
+field nodes** near Zaježová, Slovakia, since 2026-06-29 — see the root `README.md` for
+deployment results. Never edit this source without the user's explicit go-ahead; a bad flash is
+expensive to fix in the field.
+
+Each sketch (`nodes/node_with_rtc/`, `nodes/node_no_rtc/`, `hub/`) lives in its own folder named
+identically to its `.ino` file, which is what the Arduino toolchain requires to open/compile it.
+Each folder also has its own `platformio.ini`, so the same sketches are CLI-buildable with
+`pio run` (one self-contained PlatformIO project per sketch — PlatformIO has no per-environment
+`src_dir` option, so a single project-wide config covering all three doesn't work). This is what
+`.github/workflows/firmware.yml` and the root `justfile`'s `fw-build` recipe actually run.
 
 - **`nodes/`** — the firmware flashed onto field sensor nodes. There are two configurations,
   depending on whether the physical board has a DS3231 RTC module fitted:
@@ -12,9 +20,19 @@ plain **Arduino IDE sketches** — each sketch lives in its own folder named ide
   - **`node_no_rtc/`** — no RTC module. It times itself off the ESP32's internal (less accurate)
     clock and gets periodically corrected by a `TIME:` message from the hub.
 
-  Both send readings over LoRa and log locally to flash (LittleFS) so a node can resend a backlog
-  if it misses a transmission window. `NODE_ID` is a `#define` near the top of each sketch — set
-  it uniquely before flashing each physical node.
+  Both send readings over LoRa and log locally to flash (LittleFS, `/log.csv`) so a node can
+  resend a backlog if it misses a transmission window. `NODE_ID` is a `#define` near the top of
+  each sketch — set it uniquely before flashing each physical node (`node_with_rtc` currently
+  has `2`).
+
+  Known issues seen in field data: nodes log **two readings 8–13 s apart in most 20-minute
+  slots** (a double wake per cycle). If the DS3231 doesn't answer, `node_with_rtc` logs and
+  sends epoch `0`, which `sendDataSince()` then never resends. Node 3 lost about half its
+  timestamps this way.
+
+  To get a node's full local log onto a computer over USB, see `tools/` at the repo root. On
+  the LaskaKit ESP32-DEVKit, uploading needs GPIO0 jumpered to GND, because the board has no
+  BOOT button and auto-reset doesn't work reliably.
 
 - **`hub/`** — the base-station firmware: listens on LoRa, receives node packets, and replies
   during each node's listen window with `TIME:` / `GETDATA:` / `CFG:` commands. This is the
@@ -35,8 +53,9 @@ plain **Arduino IDE sketches** — each sketch lives in its own folder named ide
     doesn't reply, so it won't work with the current `node_with_rtc` / `node_no_rtc` sketches.
 
 - **`libraries/`** — third-party Arduino libraries used to build, vendored locally for
-  convenience. **Not committed to git** (see `firmware/.gitignore`) — install these yourself via
-  the Arduino Library Manager, pinned to the versions below:
+  convenience when building via the Arduino IDE. **Not committed to git** (see
+  `firmware/.gitignore`) — the pinned versions live in each sketch's `platformio.ini`
+  (`lib_deps`), which is what `pio run` actually resolves against:
   - LoRa (Sandeep Mistry) `0.8.0`
   - RTClib (Adafruit) `2.1.4`
   - Adafruit BusIO `1.17.4`

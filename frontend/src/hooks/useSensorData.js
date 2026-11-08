@@ -110,19 +110,26 @@ export function useSensorData() {
   return { sensors, loading, error, lastUpdated, refresh: load }
 }
 
-/** Full history for one node over `rangeHours`, for the detail modal. */
-export async function fetchNodeHistory(nodeId, rangeHours, cal) {
-  const cutoffIso = new Date(Date.now() - rangeHours * 3600 * 1000).toISOString()
+/**
+ * Full history for one node with a plotted time in [fromMs, toMs], for the
+ * detail modal. The query filters on received_at, but points are plotted at
+ * readingTime() (node clock when plausible), which can be far earlier — node 1
+ * has a row received 2026-09-21 stamped 2023-06-05. Anything stamped before the
+ * window is dropped here so a "7 d" chart holds exactly the last 7 days.
+ * A reading is never received before it was recorded, so filtering
+ * received_at >= fromMs can't miss anything inside the window.
+ */
+export async function fetchNodeHistory(nodeId, fromMs, toMs, cal) {
   const rows = await fetchAllRows(() =>
     supabase
       .from('readings')
       .select('raw, temperature, recorded_at, received_at, rssi, snr')
       .eq('node_id', nodeId)
-      .gte('received_at', cutoffIso)
+      .gte('received_at', new Date(fromMs).toISOString())
       .order('received_at', { ascending: true }),
   )
   return rows
     .map((r) => toPoint(r, cal))
-    .filter((p) => p.t != null)
+    .filter((p) => p.t != null && p.t >= fromMs && p.t <= toMs)
     .sort((a, b) => a.t - b.t)
 }

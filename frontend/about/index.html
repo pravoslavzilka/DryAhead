@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About DryAhead</title>
+    <meta name="description" content="DryAhead is a low-cost soil-moisture sensor network near Zvolen, Slovakia: how it works, what 100+ days of field data show, the drought forecast, and the project's history." />
+    <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1b1a16" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:site_name" content="DryAhead" />
+    <meta property="og:title" content="About DryAhead – sensors that hear the soil's thirst" />
+    <meta property="og:description" content="A soil-moisture sensor network in the field since June 2026: design, results, drought forecast and history." />
+    <meta property="og:url" content="__SITE_URL__/about/" />
+    <meta property="og:image" content="__SITE_URL__/blue/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="DryAhead: cross-section of soil with a tree, roots and a soil-moisture sensor" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/blue/favicon.svg" type="image/svg+xml" />
+
+    <!-- Theme before first paint: saved choice, else the system setting. -->
+    <script>
+      try {
+        var t = localStorage.getItem('dryahead-theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p style="padding:1rem;font-family:system-ui">DryAhead: a soil-moisture sensor network near Zvolen, Slovakia. Turn on JavaScript for the interactive charts.</p>
+    </noscript>
+    <script type="module" src="/src/about/main.jsx"></script>
+  </body>
+</html>
