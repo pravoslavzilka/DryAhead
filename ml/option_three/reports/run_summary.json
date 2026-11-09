@@ -1,0 +1,132 @@
+{
+  "1": {
+    "node_id": 1,
+    "main_fit_only": true,
+    "seed": 0,
+    "kge": 0.9770710227022499,
+    "params": {
+      "wet_ref": 2400.933637577624,
+      "dry_ref": 2590.9028071530015,
+      "Kc": 0.3786759794649609,
+      "p": 0.7108025052665538,
+      "scale_mm_to_raw": 21.19335289731938
+    },
+    "n_windows": 3,
+    "et0_method": "open-meteo-hourly-penman-monteith",
+    "persistence": {
+      "3": {
+        "n_windows": 3,
+        "mae_raw": 37.333333333333336
+      },
+      "7": {
+        "n_windows": 3,
+        "mae_raw": 35.666666666666664
+      },
+      "14": {
+        "n_windows": 1,
+        "mae_raw": 214.0
+      }
+    },
+    "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md"
+  },
+  "4": {
+    "node_id": 4,
+    "main_fit_only": false,
+    "seed": 0,
+    "kge": 0.927221084035794,
+    "params": {
+      "wet_ref": 2013.9300630127275,
+      "dry_ref": 2253.4302127574947,
+      "Kc": 0.14418443805343917,
+      "p": 0.5211886983098603,
+      "scale_mm_to_raw": 29.986173726340766
+    },
+    "n_windows": 3,
+    "et0_method": "open-meteo-hourly-penman-monteith",
+    "persistence": {
+      "3": {
+        "n_windows": 3,
+        "mae_raw": 73.0
+      },
+      "7": {
+        "n_windows": 3,
+        "mae_raw": 127.0
+      },
+      "14": {
+        "n_windows": 2,
+        "mae_raw": 131.5
+      }
+    },
+    "note": "equifinality (12 seeds): KGE robust, but Kc/scale_mm_to_raw not data-constrained (CV 0.58/0.68). Hold-out: fails outright (KGE -0.29, worse than 14d persistence baseline). Node 4 not recommended for drydown prediction as-is. See reports/node_4.md.",
+    "equifinality": {
+      "wet_ref": {
+        "mean": 2217.452,
+        "std": 223.563,
+        "cv": 0.101
+      },
+      "dry_ref": {
+        "mean": 2660.473,
+        "std": 447.126,
+        "cv": 0.168
+      },
+      "Kc": {
+        "mean": 0.418,
+        "std": 0.243,
+        "cv": 0.58
+      },
+      "p": {
+        "mean": 0.677,
+        "std": 0.136,
+        "cv": 0.201
+      },
+      "scale_mm_to_raw": {
+        "mean": 16.345,
+        "std": 11.164,
+        "cv": 0.683
+      }
+    },
+    "equifinality_kge_std": 5.33e-10,
+    "holdout": {
+      "held_out_window_days": 20.7,
+      "trained_on_windows_days": [
+        11.6,
+        15.3
+      ],
+      "held_out_kge": -0.2873539334995323,
+      "held_out_rmse": 140.8730926092421,
+      "min_windows_used": 2,
+      "note": "calibrate_node's floor loosened to min_windows=2 for this fit only, user-approved -- see NIGHT_SUMMARY.md"
+    }
+  },
+  "5": {
+    "node_id": 5,
+    "main_fit_only": true,
+    "seed": 0,
+    "tol": 5e-05,
+    "kge": 0.7591587728406127,
+    "params": {
+      "wet_ref": 2169.188616462641,
+      "dry_ref": 2599.342342922393,
+      "Kc": 1.4964262283655596,
+      "p": 0.8999898660508213,
+      "scale_mm_to_raw": 291.73835801262743
+    },
+    "n_windows": 4,
+    "et0_method": "open-meteo-hourly-penman-monteith",
+    "persistence": {
+      "3": {
+        "n_windows": 4,
+        "mae_raw": 241.5
+      },
+      "7": {
+        "n_windows": 4,
+        "mae_raw": 243.5
+      },
+      "14": {
+        "n_windows": 2,
+        "mae_raw": 490.0
+      }
+    },
+    "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md. Fit with tol=5e-5 (looser than the 1e-6 default) to converge in time -- see NIGHT_SUMMARY.md for why."
+  }
+}
