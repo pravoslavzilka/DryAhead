@@ -33,3 +33,14 @@ Thumbs.db
 # Security-sensitive suggestions (specific unrotated-credential locations,
 # etc.) - this repo is public, don't index that in git history.
 .claude/SUGGESTIONS.local.md
+
+# --- Local secrets (never commit) ---
+secrets/
+
+# --- Generated Arduino secrets (never commit) ---
+**/secrets.h
+
+# --- Calibration run leftovers ---
+*.bak
+*.bak[0-9]*
+tools/soil_calibration/data/*.log
