@@ -1,0 +1,30 @@
+{
+  "node_id": 1,
+  "main_fit_only": true,
+  "seed": 0,
+  "kge": 0.9770710227022499,
+  "params": {
+    "wet_ref": 2400.933637577624,
+    "dry_ref": 2590.9028071530015,
+    "Kc": 0.3786759794649609,
+    "p": 0.7108025052665538,
+    "scale_mm_to_raw": 21.19335289731938
+  },
+  "n_windows": 3,
+  "et0_method": "open-meteo-hourly-penman-monteith",
+  "persistence": {
+    "3": {
+      "n_windows": 3,
+      "mae_raw": 37.333333333333336
+    },
+    "7": {
+      "n_windows": 3,
+      "mae_raw": 35.666666666666664
+    },
+    "14": {
+      "n_windows": 1,
+      "mae_raw": 214.0
+    }
+  },
+  "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md"
+}

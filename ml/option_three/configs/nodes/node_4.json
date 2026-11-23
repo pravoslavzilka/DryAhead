@@ -1,0 +1,48 @@
+{
+  "node_id": 4,
+  "seed": 0,
+  "kge": 0.927221084035794,
+  "params": {
+    "wet_ref": 2013.9300630127275,
+    "dry_ref": 2253.4302127574947,
+    "Kc": 0.14418443805343917,
+    "p": 0.5211886983098603,
+    "scale_mm_to_raw": 29.986173726340766
+  },
+  "n_windows": 3,
+  "et0_method": "open-meteo-hourly-penman-monteith",
+  "persistence": {
+    "3": {
+      "n_windows": 3,
+      "mae_raw": 73.0
+    },
+    "7": {
+      "n_windows": 3,
+      "mae_raw": 127.0
+    },
+    "14": {
+      "n_windows": 2,
+      "mae_raw": 131.5
+    }
+  },
+  "note": "equifinality (12 seeds): KGE robust, but Kc/scale_mm_to_raw not data-constrained (CV 0.58/0.68). Hold-out: fails outright (KGE -0.29, worse than 14d persistence baseline). Node 4 not recommended for drydown prediction as-is. See reports/node_4.md.",
+  "equifinality_cv": {
+    "wet_ref": 0.101,
+    "dry_ref": 0.168,
+    "Kc": 0.58,
+    "p": 0.201,
+    "scale_mm_to_raw": 0.683
+  },
+  "equifinality_kge_std": 5.33e-10,
+  "holdout": {
+    "held_out_window_days": 20.7,
+    "trained_on_windows_days": [
+      11.6,
+      15.3
+    ],
+    "held_out_kge": -0.2873539334995323,
+    "held_out_rmse": 140.8730926092421,
+    "min_windows_used": 2,
+    "note": "calibrate_node's floor loosened to min_windows=2 for this fit only, user-approved -- see NIGHT_SUMMARY.md"
+  }
+}

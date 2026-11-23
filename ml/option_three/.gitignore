@@ -1,0 +1,6 @@
+# Mirrors ml/option_one/.gitignore and ml/option_two's pattern.
+data/_cache/
+__pycache__/
+*.pyc
+*.log
+.env

@@ -1,0 +1,31 @@
+{
+  "node_id": 5,
+  "main_fit_only": true,
+  "seed": 0,
+  "tol": 5e-05,
+  "kge": 0.7591587728406127,
+  "params": {
+    "wet_ref": 2169.188616462641,
+    "dry_ref": 2599.342342922393,
+    "Kc": 1.4964262283655596,
+    "p": 0.8999898660508213,
+    "scale_mm_to_raw": 291.73835801262743
+  },
+  "n_windows": 4,
+  "et0_method": "open-meteo-hourly-penman-monteith",
+  "persistence": {
+    "3": {
+      "n_windows": 4,
+      "mae_raw": 241.5
+    },
+    "7": {
+      "n_windows": 4,
+      "mae_raw": 243.5
+    },
+    "14": {
+      "n_windows": 2,
+      "mae_raw": 490.0
+    }
+  },
+  "note": "equifinality (12-seed) and hold-out validation deferred -- see NIGHT_SUMMARY.md. Fit with tol=5e-5 (looser than the 1e-6 default) to converge in time -- see NIGHT_SUMMARY.md for why."
+}
