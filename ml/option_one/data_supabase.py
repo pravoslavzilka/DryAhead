@@ -187,3 +187,39 @@ def load_daily_theta_proxy(url: str, key: str) -> dict[int, pd.Series]:
         s.index = s.index.tz_localize(None)
         out[int(node_id)] = s.sort_index()
     return out
+
+
+# --- Raw-count loader for the drying model (drydown.py) --------------------
+# Raw ADC counts, not the 0-1 proxy: the proxy is clamped to [0, 1] before
+# averaging, so anything wetter than `water` or drier than `air` is lost, and
+# it can't be converted back. Raw can always be converted to % later.
+
+RAW_MARGIN = 300  # counts beyond the air/water endpoints still treated as real
+SPIKE_COUNTS = 100  # one-off readings this far off a 7-reading median are glitches
+
+
+def clean_raw_readings(readings: pd.DataFrame, cal: pd.DataFrame) -> pd.DataFrame:
+    """Drop the junk found auditing nodes 1/4/5 (2026-09): raw 0-26 and
+    >3500 (as high as 9873), isolated spikes, and temperature 0 / >50 C
+    (one row read 17,027,500). Under 1% of rows. Temperature junk becomes
+    NaN rather than dropping the row, since its raw value is fine."""
+    out = []
+    for node_id, g in readings.groupby("node_id"):
+        air, water = cal.loc[node_id, "air"], cal.loc[node_id, "water"]
+        g = g[g["raw"].between(water - RAW_MARGIN, air + RAW_MARGIN)].sort_values("ts")
+        med = g["raw"].rolling(7, center=True, min_periods=3).median()
+        g = g[(g["raw"] - med).abs() <= SPIKE_COUNTS].copy()
+        g.loc[(g["temperature"] == 0) | (g["temperature"] > 50), "temperature"] = np.nan
+        out.append(g)
+    return pd.concat(out)
+
+
+def load_raw_readings(url: str, key: str, node_ids) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Cleaned per-reading raw counts for `node_ids`.
+    Returns (readings[node_id, ts (UTC), raw, temperature], calibration)."""
+    cal = fetch_calibration(url, key)
+    readings = dedupe_readings(filter_valid_nodes(fetch_readings(url, key)))
+    readings = readings[readings["node_id"].isin(node_ids)].copy()
+    readings["ts"] = pd.to_datetime(resolve_timestamp(readings), unit="s", utc=True)
+    readings = clean_raw_readings(readings, cal)
+    return readings[["node_id", "ts", "raw", "temperature"]].reset_index(drop=True), cal

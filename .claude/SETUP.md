@@ -110,12 +110,11 @@ narrowed mid-implementation, here's what's actually true:
    --exclude-standard .claude`), but nothing has been `git add`ed or
    committed. I didn't do this unprompted per your commit-only-when-asked
    preference.
-4. **Decide when to lift the source-edit guard**
-   (`.claude/hooks/source_edit_guard.py`) — it's deliberately stricter than
-   a permanent rule, built for this configuration-only pass. Once you're
-   ready for normal firmware/backend/frontend/ml development again, either
-   remove its `PreToolUse` entry from `.claude/settings.json` or narrow
-   `PROTECTED_DIRS` in the script.
+4. ~~Decide when to lift the source-edit guard~~ — **narrowed 2026-10-12**:
+   `PROTECTED_DIRS` is now `firmware/`, `hardware/`, `contracts/` only
+   (the CLAUDE.md never-break rules), and `README.md` joined `CLAUDE.md` /
+   `platformio.ini` as allowed everywhere. `backend/`, `frontend/`, `ml/`
+   are open for normal development.
 5. **Decide when to commit `ml/option_one/`** — left untracked on purpose.
 6. **Decide on the `fe` git remote** — confirmed stale, not removed this
    pass (`SUGGESTIONS.md` item 4).

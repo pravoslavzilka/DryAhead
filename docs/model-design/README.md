@@ -34,4 +34,11 @@ This is a stub — fill in as the science gets designed.
   Water Fraction drought index. See `ml/option_one/README.md` for the full design rationale and
   its known limitations — notably that the live dataset as of 2026-09 is only ~2 months deep
   (well short of the ~1 year this method assumes), so early calibration runs are data-starved and
-  should be read as a pipeline shakedown, not a validated model.
+  should be read as a pipeline shakedown, not a validated model. As of 2026-09 this combined
+  model still loses to persistence and is kept as a baseline.
+- **Option 1, split drying + wetting** (`ml/option_one/drydown.py`, `wetting.py`) — the version
+  that works and is live. Drying (between wettings) and wetting (response to station rain) are
+  fitted as separate models per node (1, 4, 5) on raw counts. At 7 days the drying model has
+  RMSE 8–10 counts on held-out days, against 15–59 for persistence. The dashboard runs both on
+  Open-Meteo's 16-day forecast to predict when each node reaches plant stress. Fitted on summer
+  2026 only.

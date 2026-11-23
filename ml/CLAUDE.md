@@ -9,9 +9,11 @@ Drought-prediction model research. **Do not touch Supabase directly** —
   .differential_evolution`, KGE-scored, forecasts via Open-Meteo
   ensembles) — not "designed, not yet built." It has already been run
   once against live Supabase data for 5 real nodes.
-- `ml/option_one/` is **intentionally uncommitted** (untracked in git).
-  Don't stage or commit it — that's the user's call, on their own
-  timeline.
+- `ml/option_one/` is committed (since `240c610`/`9873229`). Its working
+  model is the split drying + wetting pair (`drydown.py`, `wetting.py`),
+  exported to the dashboard via `export_frontend_model.py`; the combined
+  `run_pipeline.py` bucket model is a baseline that still loses to
+  persistence.
 - `ml/src/drought_ml/` is the installable package and is still an empty
   stub — `option_one/` has not been integrated into it.
 - No test framework, no lint/format config anywhere in this package.
