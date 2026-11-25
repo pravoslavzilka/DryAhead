@@ -3,10 +3,12 @@
 every chart reads this file, bundled at build time.
 
 Writes frontend/src/blue/snapshot.json:
-  - daily soil humidity (%, same scale as the dashboard) per node
+  - daily estimated water content (% vol, the dashboard's conversion) per node,
+    taken from the daily median raw reading
   - station rain per day
   - a drying-model forecast vs measurement vs persistence, from run_drydown.py
-  - held-out scores per node, and a few findings computed from the data
+  - held-out scores per node (raw sensor counts), and a few findings computed
+    from the data
 Prints the findings so they can be checked before they go on the page.
 
 Run: `python export_presentation_snapshot.py` (needs .env and outputs/ from
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from datetime import date
@@ -39,6 +42,16 @@ TARGET = os.path.join(HERE, "..", "..", "frontend", "src", "blue", "snapshot.jso
 CHART_NODES = (1, 3, 4, 5)  # 2 reported for only ~10 days
 START = "2026-06-30"  # sensors settled after installation on 06-29
 MIN_READINGS_PER_DAY = 20
+# same constants as frontend/src/lib/calibration.js
+with open(os.path.join(HERE, "..", "..", "tools", "soil_calibration", "data", "vwc_model_water50.json")) as _f:
+    VWC = json.load(_f)
+
+
+def water_content(raw: float, water: float) -> float:
+    """Raw ADC -> estimated water content, % vol (provisional, see the model file)."""
+    dry, tau, top = VWC["r_dry_used_for_nodes"], VWC["tau"], VWC["theta_water_pct"]
+    g = min(1.0, max(0.0, (dry - raw) / (dry - water)))
+    return -tau * math.log(1 - g * (1 - math.exp(-top / tau)))
 
 
 def main() -> int:
@@ -59,16 +72,15 @@ def main() -> int:
     nodes = {}
     for n in CHART_NODES:
         g = readings[readings.node_id == n]
-        air, water = cal.loc[n, "air"], cal.loc[n, "water"]
-        pct = ((air - g.raw) / (air - water) * 100).clip(0, 100)
-        s = pd.Series(pct.to_numpy(), index=g.ts.dt.tz_convert(LOCAL_TZ).to_numpy())
+        water = cal.loc[n, "water"]
+        s = pd.Series(g.raw.to_numpy(), index=g.ts.dt.tz_convert(LOCAL_TZ).to_numpy())
         daily = s.resample("1D").agg(["median", "size"])
         daily = daily["median"].where(daily["size"] >= MIN_READINGS_PER_DAY)
         daily.index = daily.index.tz_localize(None)
         daily = daily.reindex(days)
         last = daily.last_valid_index()
         nodes[str(n)] = {
-            "humidity": [None if np.isnan(v) else round(float(v), 1) for v in daily],
+            "water_content": [None if np.isnan(v) else round(water_content(v, water), 1) for v in daily],
             "last_day": last.date().isoformat() if last is not None else None,
         }
 
@@ -81,9 +93,8 @@ def main() -> int:
     seg = pd.read_csv(os.path.join(HERE, "outputs", "drydown_segments_node4.csv"), parse_dates=["date"])
     val = seg[seg.part == "validation"]
     demo_seg = val[val.segment == val.segment.max()]
-    a4, w4 = cal.loc[4, "air"], cal.loc[4, "water"]
-    # clamped to 0-100 like the dashboard (raw can pass the wet calibration point)
-    to_pct = lambda raw: round(float(min(100.0, max(0.0, (a4 - raw) / (a4 - w4) * 100))), 2)
+    w4 = cal.loc[4, "water"]
+    to_pct = lambda raw: round(water_content(raw, w4), 2)
     demo = {
         "node": 4,
         "dates": [d.date().isoformat() for d in demo_seg.date],
@@ -96,13 +107,12 @@ def main() -> int:
         dval = json.load(f)
     scores = {}
     for n in ("1", "4", "5"):
-        span = abs(cal.loc[int(n), "air"] - cal.loc[int(n), "water"]) / 100  # counts per % point
         h7 = dval[n]["single_rate"]["rmse_by_horizon"]["validation"].get("7", {})
-        scores[n] = {k: round(h7[k]["rmse"] / span, 2) for k in ("model", "persistence", "drift") if k in h7}
+        scores[n] = {k: round(h7[k]["rmse"], 1) for k in ("model", "persistence", "drift") if k in h7}
         scores[n]["n"] = h7.get("model", {}).get("n")
 
     # --- findings, computed (printed for review) -----------------------------
-    hum = pd.DataFrame({n: pd.Series(v["humidity"], index=days, dtype=float) for n, v in nodes.items()})
+    hum = pd.DataFrame({n: pd.Series(v["water_content"], index=days, dtype=float) for n, v in nodes.items()})
     findings = {}
 
     storm = pd.Timestamp("2026-07-15")
@@ -129,7 +139,7 @@ def main() -> int:
         "rain_mm": round(float(rain[dry_from:dry_to].sum()), 1),
         "change_pp": {n: None if np.isnan(hum[n][dry_to] - hum[n][dry_from]) else round(float(hum[n][dry_to] - hum[n][dry_from]), 1) for n in hum},
     }
-    findings["small_rain_note"] = "events of 1-3 mm: 0 of 6 raised humidity at nodes 4 and 5 (run_wetting.py)"
+    findings["small_rain_note"] = "events of 1-3 mm: 0 of 6 raised moisture at nodes 4 and 5 (run_wetting.py)"
 
     total_measurements = int(len(all_rows))
     out = {
@@ -141,13 +151,13 @@ def main() -> int:
         "total_measurements": total_measurements,
         "first_measurement": all_rows.ts.min().date().isoformat(),
         "forecast_demo": demo,
-        "scores_7d_pp": scores,
+        "scores_7d_counts": scores,
         "findings": findings,
     }
     os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
     with open(target, "w") as f:
         json.dump(out, f, separators=(",", ":"))
-    print(json.dumps({k: out[k] for k in ("total_measurements", "first_measurement", "scores_7d_pp", "findings")}, indent=2))
+    print(json.dumps({k: out[k] for k in ("total_measurements", "first_measurement", "scores_7d_counts", "findings")}, indent=2))
     print(f"demo: node 4 {demo['dates'][0]}..{demo['dates'][-1]}")
     print(f"wrote {os.path.normpath(target)} ({os.path.getsize(target) / 1024:.1f} KB)")
     return 0

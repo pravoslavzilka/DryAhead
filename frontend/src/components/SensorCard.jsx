@@ -1,7 +1,7 @@
 import { ResponsiveContainer, AreaChart, Area, YAxis, ReferenceLine } from 'recharts'
 import { STATUS_META, MAX_WATER_CONTENT, isAlertStatus } from '../lib/calibration'
 import { trendText } from '../lib/droughtStatus'
-import { timeAgo, fmtTemp } from '../lib/format'
+import { timeAgo, fmtWater, fmtTemp } from '../lib/format'
 import { nodeModel, currentRaw, forecastNode } from '../lib/droughtForecast'
 import { useDroughtWeather } from '../hooks/useDroughtWeather'
 
@@ -78,11 +78,19 @@ export default function SensorCard({ sensor, onSelect }) {
       </div>
 
       <div>
-        <div className="text-2xl font-bold tracking-tight" style={{ color: meta.color }}>
-          {meta.label}
+        <div className="flex items-end justify-between gap-2">
+          <span className="text-3xl font-bold tracking-tight" style={{ color: meta.color }}>
+            {fmtWater(latest?.waterContent)}
+          </span>
+          <span className="text-right text-[11px] text-stone-400">est. volumetric<br />water content</span>
         </div>
-        <div className="text-xs text-stone-500">
-          {status === 'stale' ? 'Waiting for new readings' : trendText(trend)}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}>
+            {meta.label}
+          </span>
+          <span className="text-xs text-stone-500">
+            {status === 'stale' ? 'Waiting for new readings' : trendText(trend)}
+          </span>
         </div>
       </div>
 

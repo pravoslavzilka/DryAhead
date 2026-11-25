@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useInView, useReducedMotion, useLang, fmtDate } from './ui'
+import { rawToWaterContent, STATUS_META, STALE_AFTER_MS } from '../lib/calibration'
+import { currentRaw } from '../lib/droughtForecast'
+import { dryLimit, sensorStatus } from '../lib/droughtStatus'
 
 // ------------------------------------------------------- a sensor's 20 minutes
 
@@ -214,7 +217,8 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const LIVE_NODES = [1, 4, 5]
 const LIVE_TIMEOUT_MS = 4000
-const STALE_MS = 3 * 3600 * 1000
+// enough for 24 h of every live node, including resent duplicates
+const LIVE_ROWS = 400
 
 async function fetchLive() {
   if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('not configured')
@@ -225,15 +229,21 @@ async function fetchLive() {
   }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
   try {
     const [cal, rows] = await Promise.all([
-      get(`sensor_calibration?select=node_id,air,water&node_id=in.(${LIVE_NODES})`),
-      get(`readings?select=node_id,raw,received_at&node_id=in.(${LIVE_NODES})&order=received_at.desc&limit=60`),
+      get(`sensor_calibration?select=node_id,air,water,dry_soil&node_id=in.(${LIVE_NODES})`),
+      get(`readings?select=node_id,raw,received_at&node_id=in.(${LIVE_NODES})&order=received_at.desc&limit=${LIVE_ROWS}`),
     ])
     const out = {}
     for (const id of LIVE_NODES) {
       const c = cal.find((x) => x.node_id === id)
-      const r = rows.find((x) => x.node_id === id)
-      if (!c || !r || Date.now() - Date.parse(r.received_at) > STALE_MS) continue
-      out[id] = { pct: Math.min(100, Math.max(0, ((c.air - r.raw) / (c.air - c.water)) * 100)), at: Date.parse(r.received_at) }
+      // same rules as the dashboard: status from the 24 h median raw reading
+      const history = rows
+        .filter((x) => x.node_id === id)
+        .map((x) => ({ t: Date.parse(x.received_at), raw: x.raw }))
+        .reverse()
+      const last = history.at(-1)
+      if (!c || !last || Date.now() - last.t > STALE_AFTER_MS) continue
+      const status = sensorStatus(currentRaw(history) ?? last.raw, dryLimit(id, c), c, last.t, STALE_AFTER_MS)
+      out[id] = { status, pct: rawToWaterContent(last.raw, c), at: last.t }
     }
     if (!Object.keys(out).length) throw new Error('no fresh data')
     return out
@@ -242,21 +252,23 @@ async function fetchLive() {
   }
 }
 
-/** Latest humidity per node; silently falls back to the snapshot's last day. */
+/** Status per node, live; silently falls back to the saved water content of the snapshot's last day. */
 const LIVE_T = {
   sk: {
     live: 'Práve teraz, priamo zo senzorov',
     saved: (d) => `Stav k ${d} (uložené dáta)`,
     loading: 'Načítavam aktuálne hodnoty…',
     node: 'Uzol',
-    moisture: 'vlhkosť pôdy',
+    water: 'odhad obsahu vody',
+    status: { stress: 'Odhadovaný stres', verydry: 'Veľmi sucho', drying: 'Presychá', moist: 'Vlhko', unknown: 'Neznáme' },
   },
   en: {
     live: 'Right now, straight from the sensors',
     saved: (d) => `As of ${d} (saved data)`,
     loading: 'Loading current values…',
     node: 'Node',
-    moisture: 'soil moisture',
+    water: 'est. water content',
+    status: Object.fromEntries(['stress', 'verydry', 'drying', 'moist', 'unknown'].map((k) => [k, STATUS_META[k].label])),
   },
 }
 
@@ -271,7 +283,7 @@ export function LiveWidget({ snapshot }) {
     return () => { cancelled = true }
   }, [])
   const lastIdx = snapshot.days.length - 1
-  const fallback = Object.fromEntries(LIVE_NODES.map((id) => [id, snapshot.nodes[id]?.humidity[lastIdx]]))
+  const fallback = Object.fromEntries(LIVE_NODES.map((id) => [id, snapshot.nodes[id]?.water_content[lastIdx]]))
   return (
     <div>
       <div className="small muted" style={{ marginBottom: 8 }} aria-live="polite">
@@ -281,12 +293,19 @@ export function LiveWidget({ snapshot }) {
       </div>
       <div className="live">
         {LIVE_NODES.map((id) => {
-          const v = live ? live[id]?.pct : fallback[id]
+          const node = live?.[id]
+          const v = live ? node?.pct : fallback[id]
+          const water = v == null ? '–' : `≈${Math.round(v)} %`
           return (
             <div key={id} className="live-node">
               <div className="small muted">{t.node} {id}</div>
-              <div className="v">{v == null ? '–' : `${Math.round(v)} %`}</div>
-              <div className="small muted">{t.moisture}</div>
+              <div className="v">{water}</div>
+              <div className="small muted">{t.water}</div>
+              {node && (
+                <div className="small" style={{ color: STATUS_META[node.status].color, fontWeight: 600 }}>
+                  {t.status[node.status]}
+                </div>
+              )}
             </div>
           )
         })}

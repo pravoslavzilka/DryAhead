@@ -15,21 +15,21 @@ function moistureAt(p) {
 const T = {
   sk: {
     status: ['Prší – pôda nasakuje vodu', 'Pri koreňoch chýba voda – čas zaliať', 'Pôda vysychá – zatiaľ netreba zalievať', 'Vlahy je dosť – zálievka by bola zbytočná'],
-    aria: (pct, status) => `Ilustrácia: prierez pôdou so stromom, koreňmi a senzorom pri koreňoch. Vlhkosť pôdy ${pct} %. ${status}.`,
+    aria: (status) => `Ilustrácia: prierez pôdou so stromom, koreňmi a senzorom pri koreňoch. ${status}.`,
     sensor: 'senzor pri koreňoch',
     illu: 'ilustračné',
     slideReduced: 'Posuňte a pozrite sa, ako sa mení vlhkosť:',
     slide: 'Pri scrollovaní sa pôda mení. Môžete posúvať aj ručne:',
-    valueText: (status, pct) => `${status}, vlhkosť ${pct} %`,
+    valueText: (status) => status,
   },
   en: {
     status: ['Raining – the soil is soaking up water', 'The roots are short of water – time to water', 'The soil is drying – no need to water yet', 'Plenty of moisture – watering would be wasted'],
-    aria: (pct, status) => `Illustration: cross-section of soil with a tree, its roots and a sensor at the roots. Soil moisture ${pct} %. ${status}.`,
+    aria: (status) => `Illustration: cross-section of soil with a tree, its roots and a sensor at the roots. ${status}.`,
     sensor: 'sensor at the roots',
     illu: 'illustration',
     slideReduced: 'Slide to see how the moisture changes:',
     slide: 'The soil changes as you scroll. You can also slide it by hand:',
-    valueText: (status, pct) => `${status}, moisture ${pct} %`,
+    valueText: (status) => status,
   },
 }
 
@@ -79,7 +79,7 @@ export default function SoilFigure() {
 
   return (
     <figure className="soil-fig" ref={ref} style={{ margin: 0 }}>
-      <svg viewBox="0 0 400 300" role="img" aria-label={t.aria(pct, statusText(m, raining, lang))}>
+      <svg viewBox="0 0 400 300" role="img" aria-label={t.aria(statusText(m, raining, lang))}>
         <defs>
           <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" style={{ stopColor: raining ? '#9fb2c2' : '#cfe3ee' }} />
@@ -178,7 +178,7 @@ export default function SoilFigure() {
           max="100"
           value={Math.round(p * 100)}
           onChange={(e) => setP(Number(e.target.value) / 100)}
-          aria-valuetext={t.valueText(statusText(m, raining, lang), pct)}
+          aria-valuetext={t.valueText(statusText(m, raining, lang))}
         />
       </div>
     </figure>
