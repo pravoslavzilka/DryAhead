@@ -59,3 +59,8 @@ export function readingTime(r) {
   }
   return recv ?? null
 }
+
+/** Estimated water content: whole numbers only, it is not accurate to decimals. */
+export function fmtWater(v) {
+  return v == null ? '—' : `≈${Math.round(v)}%`
+}

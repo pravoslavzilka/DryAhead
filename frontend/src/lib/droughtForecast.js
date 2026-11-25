@@ -1,5 +1,5 @@
 import model from '../data/droughtModel.json'
-import { rawToHumidity } from './calibration'
+import { rawToWaterContent } from './calibration'
 
 /**
  * Drought forecast for the modelled nodes (1, 4, 5), run in the browser.
@@ -96,8 +96,8 @@ export function forecastNode(nodeId, x0, t0, days, todayIdx, { withRain }) {
   return { points, stressAt, stressedNow: x0 >= stress }
 }
 
-/** Plant-stress threshold on the dashboard's 0-100 % scale. */
+/** Plant-stress threshold on the dashboard's water-content scale. */
 export function stressPct(nodeId, cal) {
   const m = nodeModel(nodeId)
-  return m ? rawToHumidity(m.stress_raw, cal) : null
+  return m ? rawToWaterContent(m.stress_raw, cal) : null
 }

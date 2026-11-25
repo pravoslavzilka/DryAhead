@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, fetchAllRows } from '../lib/supabase'
-import { rawToHumidity, thresholds, sensorStatus } from '../lib/calibration'
+import { rawToWaterContent, STALE_AFTER_MS } from '../lib/calibration'
+import { dryLimit, sensorStatus, rawTrend } from '../lib/droughtStatus'
+import { currentRaw } from '../lib/droughtForecast'
 import { parseGps } from '../lib/gps'
 import { readingTime } from '../lib/format'
 
@@ -11,7 +13,7 @@ function toPoint(r, cal) {
   const t = readingTime(r)
   return {
     t,
-    humidity: rawToHumidity(r.raw, cal),
+    waterContent: rawToWaterContent(r.raw, cal),
     raw: r.raw,
     temperature: r.temperature,
     rssi: r.rssi,
@@ -80,15 +82,18 @@ export function useSensorData() {
           .filter((p) => p.t != null)
           .sort((a, b) => a.t - b.t)
         const latest = history.at(-1) ?? null
-        const th = thresholds(cal)
+        const limit = dryLimit(cal.node_id, cal)
+        const statusRaw = currentRaw(history) ?? latest?.raw ?? null
         return {
           nodeId: cal.node_id,
           cal,
           gps: parseGps(cal.GPS),
           history,
           latest,
-          ...th,
-          status: sensorStatus(latest?.humidity ?? null, th, latest?.t ?? null),
+          limit,
+          limitPct: rawToWaterContent(limit?.raw, cal),
+          trend: rawTrend(history),
+          status: sensorStatus(statusRaw, limit, cal, latest?.t ?? null, STALE_AFTER_MS),
         }
       })
 

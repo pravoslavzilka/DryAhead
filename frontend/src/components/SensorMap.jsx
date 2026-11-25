@@ -1,13 +1,15 @@
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { STATUS_META } from '../lib/calibration'
-import { timeAgo, fmtPct, fmtTemp } from '../lib/format'
+import { STATUS_META, isAlertStatus } from '../lib/calibration'
+import { trendText } from '../lib/droughtStatus'
+import { timeAgo, fmtTemp } from '../lib/format'
+
+const MARKER_SYMBOL = { stress: '!', verydry: '!', drying: '~', moist: '✓' }
 
 function markerIcon(sensor) {
-  const pct = sensor.latest?.humidity
-  const label = pct == null ? '?' : `${Math.round(pct)}%`
-  const alert = sensor.status === 'critical' ? '<span class="marker-alert">⚠️</span>' : ''
+  const label = MARKER_SYMBOL[sensor.status] ?? '?'
+  const alert = isAlertStatus(sensor.status) ? '<span class="marker-alert">⚠️</span>' : ''
   return L.divIcon({
     className: 'marker-wrap',
     html: `<div style="position:relative"><div class="marker-pin status-${sensor.status}"><span>${label}</span></div>${alert}</div>`,
@@ -59,15 +61,11 @@ export default function SensorMap({ sensors, onSelect }) {
           <Marker key={s.nodeId} position={[s.gps.lat, s.gps.lng]} icon={markerIcon(s)}>
             <Popup>
               <div className="min-w-44 space-y-1.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-semibold">Sensor {s.nodeId}</span>
-                  <span className="text-xs font-medium" style={{ color: meta.color }}>
-                    {s.status === 'critical' ? '⚠️ ' : ''}{meta.label}
-                  </span>
+                <span className="font-semibold">Sensor {s.nodeId}</span>
+                <div className="text-lg font-bold" style={{ color: meta.color }}>
+                  {meta.label}
                 </div>
-                <div className="text-2xl font-bold text-stone-800">
-                  {fmtPct(s.latest?.humidity)}
-                </div>
+                {s.status !== 'stale' && <div className="text-xs text-stone-600">{trendText(s.trend)}</div>}
                 <div className="text-xs text-stone-500">
                   Temperature: {fmtTemp(s.latest?.temperature)}
                   <br />

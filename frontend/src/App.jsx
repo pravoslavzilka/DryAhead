@@ -8,6 +8,7 @@ import HubStatusCard from './components/HubStatusCard'
 import ReceptionActivity from './components/ReceptionActivity'
 import InstructionsWidget from './components/InstructionsWidget'
 import { timeAgo } from './lib/format'
+import { STATUS_META, isAlertStatus } from './lib/calibration'
 
 export default function App() {
   const { sensors, loading, error, lastUpdated, refresh } = useSensorData()
@@ -31,7 +32,7 @@ export default function App() {
     history.replaceState(null, '', s ? `#sensor-${s.nodeId}` : ' ')
   }
 
-  const alerts = sensors.filter((s) => s.status === 'critical')
+  const alerts = sensors.filter((s) => isAlertStatus(s.status))
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -42,7 +43,7 @@ export default function App() {
             DryAhead
           </h1>
           <p className="text-sm text-stone-500">
-            Live soil-humidity network · updates every 20 min
+            Live soil-moisture network · updates every 20 min
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -79,8 +80,7 @@ export default function App() {
       {alerts.length > 0 && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           <span className="text-base">⚠️</span>
-          Drought alert: {alerts.map((s) => `Sensor ${s.nodeId}`).join(', ')}{' '}
-          {alerts.length === 1 ? 'is' : 'are'} below the dry-soil limit.
+          Drought alert: {alerts.map((s) => `Sensor ${s.nodeId}: ${STATUS_META[s.status].label.toLowerCase()}`).join(' · ')}
         </div>
       )}
 
@@ -134,7 +134,8 @@ export default function App() {
       <ReceptionActivity />
 
       <footer className="mt-4 text-center text-[11px] text-stone-400">
-        Humidity calibrated per sensor: air = 0 %, water = 100 %. Alert fires at the dry-soil limit.
+        Status compares each sensor&apos;s 24 h median reading with its dry limit: a model-estimated stress line, or a
+        rough very-dry value where there is no model. Neither has been checked against plants.
       </footer>
 
       {selected && <SensorModal sensor={selected} onClose={() => select(null)} />}
