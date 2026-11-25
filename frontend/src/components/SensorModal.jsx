@@ -4,15 +4,16 @@ import {
   CartesianGrid, Tooltip, ReferenceLine, Brush,
 } from 'recharts'
 import { fetchNodeHistory } from '../hooks/useSensorData'
-import { STATUS_META, READINGS_PER_DAY, rawToHumidity } from '../lib/calibration'
-import { timeAgo, fmtDateTime, fmtTick, fmtPct, fmtTemp } from '../lib/format'
+import { STATUS_META, READINGS_PER_DAY, rawToWaterContent, MAX_WATER_CONTENT, isAlertStatus } from '../lib/calibration'
+import { timeAgo, fmtDateTime, fmtTick, fmtWater, fmtTemp } from '../lib/format'
 import { nodeModel, currentRaw, forecastNode, stressPct, MODEL_INFO } from '../lib/droughtForecast'
 import { useDroughtWeather } from '../hooks/useDroughtWeather'
+import { trendText } from '../lib/droughtStatus'
 
 const DAY_MS = 86400000
 const FC_DRY_COLOR = '#ea580c'
 const FC_RAIN_COLOR = '#0d9488'
-const STRESS_COLOR = '#9333ea'
+const LIMIT_COLOR = '#d03b3b'
 
 const RANGES = [
   { label: '24 h', hours: 24 },
@@ -28,20 +29,20 @@ function ChartTooltip({ active, payload, label }) {
   return (
     <div className="rounded-lg border border-orange-100 bg-white/95 px-3 py-2 text-xs shadow-md">
       <div className="mb-1 font-semibold text-stone-700">{fmtDateTime(label)}</div>
-      {p.humidity != null && (
+      {p.waterContent != null && (
         <div className="text-stone-600">
-          Humidity: <span className="font-semibold" style={{ color: '#1c5cab' }}>{fmtPct(p.humidity, 1)}</span>
+          Water content (est.): <span className="font-semibold" style={{ color: '#1c5cab' }}>{fmtWater(p.waterContent)}</span>
           <span className="text-stone-400"> (raw {p.raw})</span>
         </div>
       )}
       {p.fcDry != null && (
         <div className="text-stone-600">
-          Forecast, no rain: <span className="font-semibold" style={{ color: FC_DRY_COLOR }}>{fmtPct(p.fcDry, 1)}</span>
+          Forecast, no rain: <span className="font-semibold" style={{ color: FC_DRY_COLOR }}>{fmtWater(p.fcDry)}</span>
         </div>
       )}
       {p.fcRain != null && (
         <div className="text-stone-600">
-          Forecast, with rain: <span className="font-semibold" style={{ color: FC_RAIN_COLOR }}>{fmtPct(p.fcRain, 1)}</span>
+          Forecast, with rain: <span className="font-semibold" style={{ color: FC_RAIN_COLOR }}>{fmtWater(p.fcRain)}</span>
           {p.rainMm > 0 && <span className="text-stone-400"> ({p.rainMm.toFixed(1)} mm that day)</span>}
         </div>
       )}
@@ -57,11 +58,12 @@ function ChartTooltip({ active, payload, label }) {
   )
 }
 
-function Stat({ label, value, color }) {
+function Stat({ label, value, note, color }) {
   return (
     <div className="rounded-xl bg-orange-50/70 px-3 py-2">
       <div className="text-[11px] text-stone-500">{label}</div>
       <div className="text-lg font-bold" style={color ? { color } : undefined}>{value}</div>
+      {note && <div className="text-[11px] text-stone-400">{note}</div>}
     </div>
   )
 }
@@ -145,28 +147,30 @@ function CompletenessCalendar({ data, from, to }) {
 
 function whenText(f) {
   if (!f) return '—'
-  if (f.stressedNow) return 'already in plant stress'
+  if (f.stressedNow) return 'line already reached'
   if (f.stressAt == null) return 'not within the forecast'
   const days = Math.max(1, Math.round((f.stressAt - Date.now()) / DAY_MS))
   return `${new Date(f.stressAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} (in ~${days} d)`
 }
 
-/** Plant-stress dates under both scenarios, plus what the forecast rests on. */
+/** Estimated stress dates under both scenarios, plus what the forecast rests on. */
 function ForecastSummary({ forecast, cal }) {
   const m = forecast.model
-  const errPct = m.validation_rmse_7d_counts != null && cal.air != null && cal.water != null
-    ? (m.validation_rmse_7d_counts / Math.abs(cal.air - cal.water)) * 100
+  // Convert a raw band centred on the stress point: % per count depends on wetness.
+  const err = m.validation_rmse_7d_counts
+  const errPct = err != null && forecast.stress != null
+    ? (rawToWaterContent(m.stress_raw - err, cal) - rawToWaterContent(m.stress_raw + err, cal)) / 2
     : null
   return (
     <div className="space-y-1 rounded-xl border border-purple-100 bg-purple-50/40 px-4 py-3 text-xs text-stone-600">
       <div>
         <span className="font-semibold" style={{ color: FC_DRY_COLOR }}>If no rain:</span>{' '}
-        plant stress {whenText(forecast.dry)}
+        estimated stress: {whenText(forecast.dry)}
       </div>
       {forecast.wet ? (
         <div>
           <span className="font-semibold" style={{ color: FC_RAIN_COLOR }}>With forecast rain</span>
-          {' '}({forecast.rainTotal.toFixed(1)} mm over {forecast.days} d): plant stress {whenText(forecast.wet)}
+          {' '}({forecast.rainTotal.toFixed(1)} mm over {forecast.days} d): estimated stress: {whenText(forecast.wet)}
         </div>
       ) : (
         <div className="text-stone-500">
@@ -174,9 +178,10 @@ function ForecastSummary({ forecast, cal }) {
         </div>
       )}
       <div className="text-[11px] text-stone-400">
-        Plant stress ({fmtPct(forecast.stress, 1)}) = soil dry enough that plants struggle to take up water.
+        Estimated stress line ({fmtWater(forecast.stress)}) = where the model expects plants to start struggling to
+        take up water. Not checked against plants.
         Fitted on this node's own readings {MODEL_INFO.fitted_on.replace('..', ' to ')}; weather from the Open-Meteo
-        {' '}{forecast.days}-day forecast.{errPct != null && ` Typical 7-day error ~${errPct.toFixed(1)} %.`}
+        {' '}{forecast.days}-day forecast.{errPct != null && ` Typical 7-day forecast error ~${errPct.toFixed(1)} points near the stress line (calibration error not included).`}
       </div>
     </div>
   )
@@ -230,7 +235,7 @@ export default function SensorModal({ sensor, onClose }) {
     if (!model || !dry) return null
     const wet = model.wetting.model !== 'none' ? run(true) : null
     const ahead = weather.days.slice(weather.todayIdx)
-    const pct = (raw) => rawToHumidity(raw, sensor.cal)
+    const pct = (raw) => rawToWaterContent(raw, sensor.cal)
     const points = dry.points.map((p, i) => ({
       t: p.t,
       fcDry: pct(p.raw),
@@ -257,11 +262,12 @@ export default function SensorModal({ sensor, onClose }) {
   const onBrushChange = ({ startIndex, endIndex }) =>
     setZoom(startIndex === 0 && endIndex === (chartData?.length ?? 0) - 1 ? null : { startIndex, endIndex })
 
-  const { dryPct, wetPct, latest, status } = sensor
+  const { limit, limitPct, trend, latest, status } = sensor
   const meta = STATUS_META[status]
-  const humidityVals = (data ?? []).map((p) => p.humidity).filter((v) => v != null)
-  const avg = humidityVals.length
-    ? humidityVals.reduce((a, b) => a + b, 0) / humidityVals.length
+  // Average the raw counts, then convert.
+  const rawVals = (data ?? []).map((p) => p.raw).filter((v) => v != null)
+  const avg = rawVals.length
+    ? rawToWaterContent(rawVals.reduce((a, b) => a + b, 0) / rawVals.length, sensor.cal)
     : null
 
   return (
@@ -282,7 +288,7 @@ export default function SensorModal({ sensor, onClose }) {
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-stone-800">Sensor {sensor.nodeId}</h2>
               <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${meta.badge}`}>
-                {status === 'critical' ? '⚠️ ' : ''}{meta.label}
+                {isAlertStatus(status) ? '⚠️ ' : ''}{meta.label}
               </span>
             </div>
             <p className="mt-0.5 text-xs text-stone-500">
@@ -302,10 +308,16 @@ export default function SensorModal({ sensor, onClose }) {
 
         <div className="space-y-5 px-6 py-5">
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Current humidity" value={fmtPct(latest?.humidity, 1)} color={meta.color} />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Stat label="Status (24 h median)" value={meta.label} color={meta.color} />
+            <Stat label="Trend (last day)" value={status === 'stale' ? '—' : trendText(trend)} />
             <Stat label="Temperature" value={fmtTemp(latest?.temperature)} />
-            <Stat label={`Average (${RANGES.find((r) => r.hours === rangeHours)?.label})`} value={fmtPct(avg, 1)} />
+            <Stat
+              label="Estimated volumetric water content"
+              value={fmtWater(latest?.waterContent)}
+              note={latest?.raw != null ? `latest reading, raw ${latest.raw}` : null}
+            />
+            <Stat label={`Average (${RANGES.find((r) => r.hours === rangeHours)?.label})`} value={fmtWater(avg)} />
             <Stat label="Readings loaded" value={data?.length ?? '…'} />
           </div>
 
@@ -351,16 +363,19 @@ export default function SensorModal({ sensor, onClose }) {
             )
           )}
 
-          {/* Humidity chart */}
+          {/* Water content chart */}
           <div>
             <div className="mb-1 flex items-baseline justify-between">
-              <h3 className="text-sm font-semibold text-stone-700">Soil humidity</h3>
+              <h3 className="text-sm font-semibold text-stone-700">Estimated volumetric water content (% vol)</h3>
               <span className="text-[11px] text-stone-400">
-                <span style={{ color: '#d03b3b' }}>▪</span> dry-soil limit&nbsp;&nbsp;
-                <span style={{ color: '#199e70' }}>▪</span> wet-soil limit (mud)
+                {limit && (
+                  <>
+                    <span style={{ color: LIMIT_COLOR }}>▪</span>{' '}
+                    {limit.modelled ? 'estimated stress line' : 'very-dry line (rough)'}
+                  </>
+                )}
                 {forecast && (
                   <>
-                    &nbsp;&nbsp;<span style={{ color: STRESS_COLOR }}>▪</span> plant stress
                     &nbsp;&nbsp;<span style={{ color: FC_DRY_COLOR }}>- -</span> forecast, no rain
                     {forecast.wet && <>&nbsp;&nbsp;<span style={{ color: FC_RAIN_COLOR }}>···</span> with rain</>}
                   </>
@@ -401,33 +416,27 @@ export default function SensorModal({ sensor, onClose }) {
                       minTickGap={40}
                     />
                     <YAxis
-                      domain={[0, 100]}
+                      domain={[0, MAX_WATER_CONTENT]}
                       unit="%"
                       tick={{ fill: '#8a8580', fontSize: 11 }}
                       stroke="#d9cfc4"
                     />
                     <Tooltip content={<ChartTooltip />} />
-                    {dryPct != null && (
+                    {limitPct != null && (
                       <ReferenceLine
-                        y={dryPct}
-                        stroke="#d03b3b"
+                        y={limitPct}
+                        stroke={LIMIT_COLOR}
                         strokeDasharray="5 4"
                         strokeWidth={1.5}
-                        label={{ value: 'Dry soil', position: 'insideTopRight', fill: '#d03b3b', fontSize: 11 }}
-                      />
-                    )}
-                    {wetPct != null && (
-                      <ReferenceLine
-                        y={wetPct}
-                        stroke="#199e70"
-                        strokeDasharray="5 4"
-                        strokeWidth={1.5}
-                        label={{ value: 'Wet soil (mud)', position: 'insideBottomRight', fill: '#199e70', fontSize: 11 }}
+                        label={{
+                          value: limit.modelled ? 'Estimated stress' : 'Very dry (rough)',
+                          position: 'insideTopRight', fill: LIMIT_COLOR, fontSize: 11,
+                        }}
                       />
                     )}
                     <Area
                       type="monotone"
-                      dataKey="humidity"
+                      dataKey="waterContent"
                       stroke="#2a78d6"
                       strokeWidth={2}
                       fill="url(#hum-grad)"
@@ -436,15 +445,6 @@ export default function SensorModal({ sensor, onClose }) {
                       connectNulls
                       isAnimationActive={false}
                     />
-                    {forecast && forecast.stress != null && (
-                      <ReferenceLine
-                        y={forecast.stress}
-                        stroke={STRESS_COLOR}
-                        strokeDasharray="4 4"
-                        strokeWidth={1.5}
-                        label={{ value: 'Plant stress', position: 'insideTopLeft', fill: STRESS_COLOR, fontSize: 11 }}
-                      />
-                    )}
                     {forecast && (
                       <ReferenceLine
                         x={forecast.points[0].t}
@@ -539,10 +539,15 @@ export default function SensorModal({ sensor, onClose }) {
           {/* Calibration footer */}
           <div className="rounded-xl border border-orange-100 bg-orange-50/50 px-4 py-3 text-xs text-stone-500">
             <span className="font-semibold text-stone-600">Calibration:</span>{' '}
-            air {sensor.cal.air ?? '—'} (0 %) · water {sensor.cal.water ?? '—'} (100 %) ·
-            dry soil {sensor.cal.dry_soil ?? '—'} ({fmtPct(dryPct, 1)}) ·
-            wet soil {sensor.cal.wet_soil ?? '—'} ({fmtPct(wetPct, 1)})
+            water {sensor.cal.water ?? '—'} ({MAX_WATER_CONTENT} %, assumed)
+            {limit && (
+              <> · {limit.modelled ? 'estimated stress line' : 'rough very-dry line'} raw {Math.round(limit.raw)} ({fmtWater(limitPct)})</>
+            )}
             {latest?.rssi != null && <> · RSSI {latest.rssi} dBm{latest.snr != null ? ` · SNR ${latest.snr}` : ''}</>}
+            <p className="mt-1">
+              Provisional estimate from one bench run on one soil; not verified on the field nodes. Readings shown as
+              about 11–22 % may be too low (by up to ~12 points on the bench). Above 26.5 % is interpolated, not measured.
+            </p>
           </div>
         </div>
       </div>

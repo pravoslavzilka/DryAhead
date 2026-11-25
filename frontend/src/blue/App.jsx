@@ -103,7 +103,7 @@ function StatCard({ value, sub, children, sources }) {
 
 export default function App() {
   const f = snapshot.findings
-  const s7 = snapshot.scores_7d_pp
+  const s7 = snapshot.scores_7d_counts
   const storm = f.storm_0715
   const dry = f.dry_spell_0724_0816
   const node3End = snapshot.nodes['3']?.last_day
@@ -239,8 +239,8 @@ export default function App() {
                 <h3>Viac prežitých mladých stromov</h3>
                 <p>
                   Novovysadený strom nemá rozvinuté korene a prvé roky je odkázaný na zálievku. Podľa arboristov je najčastejšou
-                  príčinou úhynu mladých stromov po výsadbe to, že sú polievané málo alebo zle. Na dashboarde DryAhead vidno,
-                  keď vlhkosť pri koreňoch klesá k hranici, pri ktorej strom začína trpieť.
+                  príčinou úhynu mladých stromov po výsadbe to, že sú polievané málo alebo zle. Dashboard DryAhead pri niektorých
+                  uzloch odhaduje, kedy sa pôda priblíži k hranici, pri ktorej strom začína trpieť. Tento odhad ešte nie je overený.
                 </p>
                 <Source href={SRC.bn} />
               </Reveal>
@@ -269,7 +269,7 @@ export default function App() {
               </p>
               <ul className="clean">
                 <li><b>Nezalievať zbytočne.</b> Po daždi senzor ukáže, že pôda má zásobu, a zálievku možno vynechať.</li>
-                <li><b>Zalievať včas.</b> Keď vlhkosť pri koreňoch klesá k hranici stresu, človek to vie skôr, než strom začne vädnúť.</li>
+                <li><b>Zalievať včas.</b> Cieľom je vedieť o poklese vlahy k hranici stresu skôr, než strom začne vädnúť.</li>
                 <li><b>Zalievať správne.</b> Z dát vidno, ako rýchlo pôda vysychá a ako hlboko voda vsiakne. Namiesto častého plytkého polievania sa dá zalievať menej často, ale tak, aby sa voda dostala ku koreňom.</li>
                 <li><b>Rozhodnúť, kam vodu dať.</b> Ak je vody málo, dáta ukážu, ktoré miesto alebo ktoré stromy ju potrebujú najviac.</li>
               </ul>
@@ -341,7 +341,7 @@ export default function App() {
             <Reveal style={{ marginTop: 20 }}><LiveWidget snapshot={snapshot} /></Reveal>
 
             <Reveal className="card" style={{ marginTop: 20 }}>
-              <h3>Vlhkosť pôdy na štyroch miestach pozemku</h3>
+              <h3>Odhadovaný obsah vody v pôde na štyroch miestach pozemku</h3>
               <DataChart snapshot={snapshot} />
             </Reveal>
 
@@ -351,17 +351,17 @@ export default function App() {
                 <ul className="clean">
                   <li>
                     <b>Rovnaký dážď, úplne iná odozva.</b> Po búrke {fmtDate('2026-07-15', { day: 'numeric', month: 'numeric' })}{' '}
-                    ({String(storm.rain_mm).replace('.', ',')} mm) stúpla vlhkosť za jeden deň pri uzle 3 o {pp(storm.change_pp['3'])} bodov,
+                    ({String(storm.rain_mm).replace('.', ',')} mm) stúpol odhad obsahu vody za jeden deň pri uzle 3 o {pp(storm.change_pp['3'])} bodov,
                     pri uzle 4 o {pp(storm.change_pp['4'])}, pri uzle 5 o {pp(storm.change_pp['5'])} a pri uzle 1 len o {pp(storm.change_pp['1'])}.
-                    Každé miesto na pozemku potrebuje vodu inak.
+                    Miesta sa môžu výrazne líšiť, hoci časť rozdielu môžu spôsobovať senzory a ich osadenie.
                   </li>
                   <li>
-                    <b>Výdatný dážď vydrží týždne.</b> Pri uzle 4 stúpla vlhkosť po tej búrke z {pp(f.node4_after_storm.before)} % na{' '}
-                    {pp(f.node4_after_storm.day_after)} % a ešte o 35 dní neskôr bola {pp(f.node4_after_storm.after_35_days)} %.
+                    <b>Výdatný dážď vydrží týždne.</b> Pri uzle 4 stúpol po tej búrke odhad z približne {pp(f.node4_after_storm.before)} % na{' '}
+                    {pp(f.node4_after_storm.day_after)} % a ešte o 35 dní neskôr bol približne {pp(f.node4_after_storm.after_35_days)} %.
                   </li>
                   <li>
                     <b>Slabý dážď ku koreňom nedôjde.</b> Ani jeden zo šiestich dažďov s 1–3 mm nezvýšil vlhkosť pri uzloch 4 a 5.
-                    A počas {dry.days} dní bez dažďa (24. 7. – 16. 8.) klesla vlhkosť o {Math.round(Math.min(...dryDrops))} až{' '}
+                    A počas {dry.days} dní bez dažďa (24. 7. – 16. 8.) klesol odhad o {Math.round(Math.min(...dryDrops))} až{' '}
                     {Math.round(Math.max(...dryDrops))} bodov.
                   </li>
                 </ul>
@@ -374,13 +374,14 @@ export default function App() {
                 </div>
                 <p className="small" style={{ marginTop: 8 }}>
                   Model som spustil z jediného merania ({fmtDate(snapshot.forecast_demo.dates[0], { day: 'numeric', month: 'numeric' })},
-                  uzol {snapshot.forecast_demo.node}) a nechal ho predpovedať ďalšie dni. Tieto dni pri učení nevidel.
+                  uzol {snapshot.forecast_demo.node}) a nechal ho predpovedať ďalšie dni. Tieto dni pri učení nevidel. Hodnoty ležia
+                  v interpolovanej, nemeranej časti stupnice obsahu vody.
                 </p>
                 <ForecastChart demo={snapshot.forecast_demo} />
                 <div className="table-scroll">
                   <table style={{ marginTop: 10 }}>
                     <caption className="small muted" style={{ captionSide: 'bottom', textAlign: 'left', paddingTop: 6 }}>
-                      Priemerná chyba predpovede na 7 dní dopredu, v percentuálnych bodoch vlhkosti (menej je lepšie). Počet 7-dňových predpovedí na uzol: {Object.values(s7).map((v) => v.n).join(', ')}.
+                      Priemerná chyba predpovede na 7 dní dopredu, v surových jednotkách senzora (menej je lepšie). Tieto jednotky sa nedajú porovnávať medzi rôznymi pôdami a senzormi. Počet 7-dňových predpovedí na uzol: {Object.values(s7).map((v) => v.n).join(', ')}.
                     </caption>
                     <thead><tr><th>Uzol</th><th className="num">Model</th><th className="num">„Zostane to tak“</th></tr></thead>
                     <tbody>
@@ -550,8 +551,8 @@ ET0 = referenčný výpar z meteostanice (mm/deň)
                   </p>
                   <p>
                     <b>Bod stresu</b> je vlhkosť, pod ktorou rastliny začínajú ťažšie čerpať vodu a vysychanie sa spomalí. Pre
-                    každý uzol ho model odhadol z dát a dashboard podľa neho ukazuje, o koľko dní by pri súčasnej predpovedi
-                    počasia bez dažďa nastal.
+                    každý uzol ho model odhadol z dát a dashboard podľa neho odhaduje, o koľko dní by pri súčasnej predpovedi
+                    počasia bez dažďa nastal. S rastlinami tento bod ešte nie je overený.
                   </p>
 
                   <h3>Softvér</h3>

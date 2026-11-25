@@ -58,10 +58,10 @@ body {
   transform: rotate(45deg);
 }
 
-.marker-pin.status-ok      { background: #ea580c; }
-.marker-pin.status-dry     { background: #ec835a; }
-.marker-pin.status-critical { background: #d03b3b; animation: pulse-ring 1.6s ease-out infinite; }
-.marker-pin.status-wet     { background: #2a78d6; }
+.marker-pin.status-moist    { background: #0ca30c; }
+.marker-pin.status-drying   { background: #ec835a; }
+.marker-pin.status-stress,
+.marker-pin.status-verydry  { background: #d03b3b; animation: pulse-ring 1.6s ease-out infinite; }
 .marker-pin.status-stale   { background: #a8a29e; }
 
 .marker-alert {

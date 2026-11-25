@@ -1,0 +1,14 @@
+{
+  "theta_water_pct": 50.0,
+  "tau": 20.620311057071984,
+  "chi2_dof": 5.3679481687440616,
+  "r_dry_bench_per_sensor": {
+    "1": 3319.4833333333336,
+    "2": 3231.736666666667,
+    "3": 3175.9193333333333
+  },
+  "r_dry_used_for_nodes": 3242.379777777778,
+  "r_water_mean_for_bench_side": 1730.6,
+  "formula": "g=(r_dry-raw)/(r_dry-r_water); theta=-tau*ln(1-g*(1-exp(-theta_water/tau)))",
+  "disclaimer": "PROVISIONAL: one oven-dry soil, 3 bench sensors, one run, room temperature. Measured 0-26.5 % VWC (0-11 % +/-1 pt, 11-17 % +/-2-4, 17-26.5 % indicative +/-5-10). Above 26.5 % the curve is INTERPOLATED to the 'water' reading, assumed = 50 %, and is not validated. 0 % = bench oven-dry reading applied to nodes although bench sensors and nodes are different units (offset unverified). Not a certified measurement."
+}

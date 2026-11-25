@@ -1,44 +1,41 @@
 /**
- * Calibration: `air` and `water` are the raw-value extremes.
- *   air   -> 0 % humidity (bone dry)
- *   water -> 100 % humidity (submerged)
- * The mapping is linear and direction-agnostic (works whether raw rises or
- * falls with moisture), clamped to 0–100.
+ * Raw ADC -> estimated soil water content (% by volume). PROVISIONAL.
+ *
+ * Do all maths (averages, thresholds, forecasts) on raw counts and convert
+ * only for display: the curve is not linear.
+ *
+ * From the 2026-11-22 bench run (tools/soil_calibration/vwc_convert.py,
+ * data/vwc_model_water50.json): one soil, 3 bench sensors, one run.
+ *   0 %  = bench oven-dry reading (mean of the 3 bench sensors, not the nodes)
+ *   50 % = the node's `water` reading (assumed value, not measured)
+ * Measured up to 26.5 %; above that the curve is interpolated.
  */
-export function rawToHumidity(raw, cal) {
-  if (raw == null || cal?.air == null || cal?.water == null || cal.air === cal.water) return null
-  const pct = ((cal.air - raw) / (cal.air - cal.water)) * 100
-  return Math.min(100, Math.max(0, pct))
-}
+const RAW_OVEN_DRY = 3242.4
+const WATER_PCT = 50
+const TAU = 20.62
 
-/** dry_soil / wet_soil expressed on the same 0–100 % scale, for chart guides + alerts. */
-export function thresholds(cal) {
-  return {
-    dryPct: rawToHumidity(cal?.dry_soil, cal),
-    wetPct: rawToHumidity(cal?.wet_soil, cal),
-  }
+/** Top of the display scale, for chart axes. */
+export const MAX_WATER_CONTENT = WATER_PCT
+
+export function rawToWaterContent(raw, cal) {
+  if (raw == null || cal?.water == null || cal.water >= RAW_OVEN_DRY) return null
+  const g = Math.min(1, Math.max(0, (RAW_OVEN_DRY - raw) / (RAW_OVEN_DRY - cal.water)))
+  return -TAU * Math.log(1 - g * (1 - Math.exp(-WATER_PCT / TAU)))
 }
 
 export const STATUS_META = {
-  critical: { label: 'Extremely dry', color: '#d03b3b', badge: 'bg-red-100 text-red-700 border-red-200' },
-  dry: { label: 'Dry', color: '#ec835a', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
-  ok: { label: 'Normal', color: '#0ca30c', badge: 'bg-green-100 text-green-700 border-green-200' },
-  wet: { label: 'Saturated (mud)', color: '#2a78d6', badge: 'bg-blue-100 text-blue-700 border-blue-200' },
+  stress: { label: 'Estimated stress', color: '#d03b3b', badge: 'bg-red-100 text-red-700 border-red-200' },
+  verydry: { label: 'Very dry (rough limit)', color: '#d03b3b', badge: 'bg-red-100 text-red-700 border-red-200' },
+  drying: { label: 'Getting dry', color: '#ec835a', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
+  moist: { label: 'Moist', color: '#0ca30c', badge: 'bg-green-100 text-green-700 border-green-200' },
   stale: { label: 'No recent data', color: '#a8a29e', badge: 'bg-stone-100 text-stone-500 border-stone-200' },
   unknown: { label: 'Unknown', color: '#a8a29e', badge: 'bg-stone-100 text-stone-500 border-stone-200' },
 }
 
+export const isAlertStatus = (status) => status === 'stress' || status === 'verydry'
+
 const REPORT_INTERVAL_MIN = 20
-const STALE_AFTER_MS = 3 * REPORT_INTERVAL_MIN * 60 * 1000 // 3 missed cycles = stale
+export const STALE_AFTER_MS = 3 * REPORT_INTERVAL_MIN * 60 * 1000 // 3 missed cycles = stale
 
 /** Expected readings for a node in a full day, given its ~20 min report cadence. */
 export const READINGS_PER_DAY = (24 * 60) / REPORT_INTERVAL_MIN
-
-export function sensorStatus(humidity, { dryPct, wetPct }, lastSeenMs) {
-  if (lastSeenMs == null || Date.now() - lastSeenMs > STALE_AFTER_MS) return 'stale'
-  if (humidity == null) return 'unknown'
-  if (dryPct != null && humidity <= dryPct) return 'critical'
-  if (dryPct != null && humidity <= dryPct + 10) return 'dry'
-  if (wetPct != null && humidity >= wetPct) return 'wet'
-  return 'ok'
-}

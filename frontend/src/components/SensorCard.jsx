@@ -1,15 +1,19 @@
 import { ResponsiveContainer, AreaChart, Area, YAxis, ReferenceLine } from 'recharts'
-import { STATUS_META } from '../lib/calibration'
-import { timeAgo, fmtPct, fmtTemp } from '../lib/format'
+import { STATUS_META, MAX_WATER_CONTENT, isAlertStatus } from '../lib/calibration'
+import { trendText } from '../lib/droughtStatus'
+import { timeAgo, fmtWater, fmtTemp } from '../lib/format'
 import { nodeModel, currentRaw, forecastNode } from '../lib/droughtForecast'
 import { useDroughtWeather } from '../hooks/useDroughtWeather'
 
 const DAY_MS = 86400000
 
-/** Small label: when this node reaches plant stress if no rain falls. */
+/** Small label: when this node reaches its estimated stress line if no rain falls. */
 function DroughtLabel({ sensor }) {
   const modelled = nodeModel(sensor.nodeId) != null && sensor.status !== 'stale'
   const { weather } = useDroughtWeather(modelled)
+  if (nodeModel(sensor.nodeId) == null) {
+    return <span className="self-start text-[11px] text-stone-400">No forecast model for this node</span>
+  }
   if (!modelled || !weather) return null
   const x0 = currentRaw(sensor.history)
   const f = forecastNode(sensor.nodeId, x0, sensor.latest?.t, weather.days, weather.todayIdx, { withRain: false })
@@ -18,23 +22,23 @@ function DroughtLabel({ sensor }) {
   const horizonDays = weather.days.length - weather.todayIdx
   let text, cls
   if (f.stressedNow) {
-    text = 'Plant stress now'
+    text = 'At or past the estimated stress line'
     cls = 'bg-red-100 text-red-700 border-red-200'
   } else if (f.stressAt != null) {
     const days = Math.max(1, Math.round((f.stressAt - Date.now()) / DAY_MS))
     const date = new Date(f.stressAt).toLocaleDateString([], { day: 'numeric', month: 'short' })
-    text = `Plant stress in ~${days} d (${date}) if no rain`
+    text = `Estimated stress in ~${days} d (${date}) if no rain`
     cls = days <= 3 ? 'bg-red-100 text-red-700 border-red-200'
       : days <= 7 ? 'bg-orange-100 text-orange-700 border-orange-200'
         : 'bg-amber-50 text-amber-700 border-amber-200'
   } else {
-    text = `No plant stress within ${horizonDays} d, even without rain`
+    text = `Stress line not reached within ${horizonDays} d without rain (estimate)`
     cls = 'bg-stone-50 text-stone-500 border-stone-200'
   }
   return (
     <span
       className={`self-start rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}
-      title="Drought forecast: this node's fitted drying model driven by the Open-Meteo 16-day forecast, assuming no rain. Plant stress = soil dry enough that plants struggle to take up water."
+      title="Rough estimate: this node's fitted drying model driven by the Open-Meteo 16-day forecast, assuming no rain. The stress line comes from the model and has not been checked against plants."
     >
       {text}
     </span>
@@ -50,13 +54,10 @@ function AlertIcon() {
 }
 
 export default function SensorCard({ sensor, onSelect }) {
-  const { latest, history, status, dryPct, wetPct } = sensor
+  const { latest, history, status, trend, limitPct } = sensor
   const meta = STATUS_META[status]
-  const isAlert = status === 'critical'
-  const spark = history.filter((p) => p.humidity != null)
-  const values = spark.map((p) => p.humidity)
-  const min = values.length ? Math.min(...values) : null
-  const max = values.length ? Math.max(...values) : null
+  const isAlert = isAlertStatus(status)
+  const spark = history.filter((p) => p.waterContent != null)
 
   return (
     <button
@@ -73,19 +74,24 @@ export default function SensorCard({ sensor, onSelect }) {
             {latest?.temperature != null && ` · ${fmtTemp(latest.temperature)}`}
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
-          {isAlert && <AlertIcon />}
+        {isAlert && <AlertIcon />}
+      </div>
+
+      <div>
+        <div className="flex items-end justify-between gap-2">
+          <span className="text-3xl font-bold tracking-tight" style={{ color: meta.color }}>
+            {fmtWater(latest?.waterContent)}
+          </span>
+          <span className="text-right text-[11px] text-stone-400">est. volumetric<br />water content</span>
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}>
             {meta.label}
           </span>
+          <span className="text-xs text-stone-500">
+            {status === 'stale' ? 'Waiting for new readings' : trendText(trend)}
+          </span>
         </div>
-      </div>
-
-      <div className="flex items-end justify-between">
-        <span className="text-3xl font-bold tracking-tight" style={{ color: meta.color }}>
-          {fmtPct(latest?.humidity)}
-        </span>
-        <span className="text-[11px] text-stone-400">soil humidity</span>
       </div>
 
       <DroughtLabel sensor={sensor} />
@@ -100,13 +106,13 @@ export default function SensorCard({ sensor, onSelect }) {
                   <stop offset="100%" stopColor="#2a78d6" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <YAxis hide domain={[0, 100]} />
-              {dryPct != null && (
-                <ReferenceLine y={dryPct} stroke="#d03b3b" strokeDasharray="3 3" strokeWidth={1} />
+              <YAxis hide domain={[0, MAX_WATER_CONTENT]} />
+              {limitPct != null && (
+                <ReferenceLine y={limitPct} stroke="#d03b3b" strokeDasharray="3 3" strokeWidth={1} />
               )}
               <Area
                 type="monotone"
-                dataKey="humidity"
+                dataKey="waterContent"
                 stroke="#2a78d6"
                 strokeWidth={2}
                 fill={`url(#spark-${sensor.nodeId})`}
@@ -123,7 +129,7 @@ export default function SensorCard({ sensor, onSelect }) {
       </div>
 
       <div className="flex justify-between text-[11px] text-stone-500">
-        <span>48 h range: {fmtPct(min)} – {fmtPct(max)}</span>
+        <span>Last 48 h</span>
         <span className="font-medium text-orange-600 opacity-0 transition group-hover:opacity-100">
           Details →
         </span>

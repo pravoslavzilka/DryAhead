@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useWidth, useLang, localeOf, fmtDate, fmtDec } from './ui'
+import { MAX_WATER_CONTENT } from '../lib/calibration'
 
 const NODE_META = {
   1: { color: 'var(--n1)' },
@@ -15,7 +16,7 @@ const fmtNum = (v, d = 1, lang = 'sk') => (v == null ? '–' : fmtDec(v, d, lang
 
 const DATA_T = {
   sk: {
-    summary: (nodes, from, to, storms) => `Graf dennej vlhkosti pôdy pre uzly ${nodes} od ${from} do ${to}, s dennými zrážkami zo stanice Zaježová. Najväčšie dažde: ${storms}.`,
+    summary: (nodes, from, to, storms) => `Graf denného odhadu obsahu vody v pôde pre uzly ${nodes} od ${from} do ${to}, s dennými zrážkami zo stanice Zaježová. Najväčšie dažde: ${storms}.`,
     show: 'Zobraziť uzly',
     until: 'do',
     rainLegend: 'dážď (mm, stanica Zaježová)',
@@ -23,10 +24,10 @@ const DATA_T = {
     dryLong: 'tu pôda vysychá: 24 dní bez dažďa',
     rainHere: (mm) => `tu pršalo (${mm} mm)`,
     rain: 'dážď',
-    note: 'Denný medián vlhkosti pôdy (0 % = senzor na vzduchu, 100 % = senzor vo vode). Ťuknite alebo prejdite myšou na graf, prípadne ho vyberte klávesom Tab a použite šípky.',
+    note: 'Denný medián odhadovaného objemového obsahu vody v pôde (% objemu). Predbežný odhad z jedného laboratórneho merania na jednej pôde: 0 % = vysušená pôda, údaj senzora vo vode = 50 % (predpoklad). Na uzloch v teréne neoverený, hodnoty okolo 11–22 % môžu byť príliš nízke a nad 26,5 % ide o interpoláciu. Ťuknite alebo prejdite myšou na graf, prípadne ho vyberte klávesom Tab a použite šípky.',
   },
   en: {
-    summary: (nodes, from, to, storms) => `Daily soil moisture for nodes ${nodes} from ${from} to ${to}, with daily rain from the Zaježová station. Biggest rains: ${storms}.`,
+    summary: (nodes, from, to, storms) => `Daily estimated soil water content for nodes ${nodes} from ${from} to ${to}, with daily rain from the Zaježová station. Biggest rains: ${storms}.`,
     show: 'Show nodes',
     until: 'until',
     rainLegend: 'rain (mm, Zaježová station)',
@@ -34,7 +35,7 @@ const DATA_T = {
     dryLong: 'the soil dries out: 24 days without rain',
     rainHere: (mm) => `rain (${mm} mm)`,
     rain: 'rain',
-    note: 'Daily median soil moisture (0 % = sensor in air, 100 % = sensor in water). Tap or hover over the chart, or select it with Tab and use the arrow keys.',
+    note: 'Daily median of estimated volumetric water content (% vol). Provisional, from one bench run on one soil: 0 % = oven-dry soil, a sensor reading in water = 50 % (assumed). Not verified on the field nodes; values around 11–22 % may be too low, and above 26.5 % is interpolated. Tap or hover over the chart, or select it with Tab and use the arrow keys.',
   },
 }
 
@@ -52,7 +53,7 @@ const FORECAST_T = {
     model: 'model forecast',
     persistence: '“stays the same”',
     baseline: '“stays the same” (baseline)',
-    aria: (node, from, to) => `Drying forecast for node ${node} from ${from} to ${to}: the model started from the first measurement, compared with the measurements and with assuming moisture stays the same.`,
+    aria: (node, from, to) => `Drying forecast for node ${node} from ${from} to ${to}, in estimated water content: the model started from the first measurement, compared with the measurements and with assuming it stays the same.`,
     day: 'day',
   },
 }
@@ -112,7 +113,7 @@ export function DataChart({ snapshot }) {
   const ph = H - m.t - m.b
   const step = pw / (n - 1)
   const x = (i) => m.l + i * step
-  const y = (v) => m.t + ph - (v / 100) * ph
+  const y = (v) => m.t + ph - (v / MAX_WATER_CONTENT) * ph
   const rainMax = 25
   const rainH = ph * 0.32
   const yr = (mm) => m.t + ph - (Math.min(mm, rainMax) / rainMax) * rainH
@@ -160,7 +161,7 @@ export function DataChart({ snapshot }) {
           aria-label={summary}
           {...handlers}
         >
-          {[0, 25, 50, 75, 100].map((v) => (
+          {[0, 10, 20, 30, 40, 50].map((v) => (
             <g key={v}>
               <line className="grid-line" x1={m.l} x2={width - m.r} y1={y(v)} y2={y(v)} />
               <text x={m.l - 6} y={y(v) + 4} textAnchor="end">{v} %</text>
@@ -197,16 +198,16 @@ export function DataChart({ snapshot }) {
             </g>
           ))}
 
-          {/* humidity lines */}
+          {/* water content lines */}
           {nodes.filter((id) => shown[id]).map((id) => (
-            <path key={id} d={linePath(snapshot.nodes[id].humidity, x, y)} fill="none" stroke={NODE_META[id].color} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+            <path key={id} d={linePath(snapshot.nodes[id].water_content, x, y)} fill="none" stroke={NODE_META[id].color} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
           ))}
 
           {idx != null && (
             <g>
               <line x1={x(idx)} x2={x(idx)} y1={m.t} y2={m.t + ph} stroke="var(--ink-2)" strokeWidth="1" />
-              {nodes.filter((id) => shown[id] && snapshot.nodes[id].humidity[idx] != null).map((id) => (
-                <circle key={id} cx={x(idx)} cy={y(snapshot.nodes[id].humidity[idx])} r="4" fill={NODE_META[id].color} stroke="var(--card)" strokeWidth="2" />
+              {nodes.filter((id) => shown[id] && snapshot.nodes[id].water_content[idx] != null).map((id) => (
+                <circle key={id} cx={x(idx)} cy={y(snapshot.nodes[id].water_content[idx])} r="4" fill={NODE_META[id].color} stroke="var(--card)" strokeWidth="2" />
               ))}
             </g>
           )}
@@ -222,7 +223,7 @@ export function DataChart({ snapshot }) {
             {nodes.filter((id) => shown[id]).map((id) => (
               <div key={id}>
                 <span className="dot" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9, background: NODE_META[id].color, marginRight: 6 }} />
-                {nodeLabel(id, lang)}: <b>{fmtNum(snapshot.nodes[id].humidity[idx], 1, lang)} %</b>
+                {nodeLabel(id, lang)}: <b>{snapshot.nodes[id].water_content[idx] == null ? '–' : `≈${fmtNum(snapshot.nodes[id].water_content[idx], 0, lang)} %`}</b>
               </div>
             ))}
           </div>
@@ -246,7 +247,7 @@ export function ForecastChart({ demo }) {
   const ph = H - m.t - m.b
   const vals = [...demo.measured.filter((v) => v != null), ...demo.model, demo.persistence]
   const lo = Math.floor(Math.min(...vals) - 1)
-  const hi = Math.min(100, Math.ceil(Math.max(...vals) + 1))
+  const hi = Math.min(MAX_WATER_CONTENT, Math.ceil(Math.max(...vals) + 1))
   const step = pw / (n - 1)
   const x = (i) => m.l + i * step
   const y = (v) => m.t + ((hi - v) / (hi - lo)) * ph
@@ -282,9 +283,9 @@ export function ForecastChart({ demo }) {
         {idx != null && (
           <div className="chart-tip" style={{ left: Math.min(width - 170, Math.max(0, x(idx) + 10)), top: 20 }} aria-live="polite">
             <b>{fmtDate(demo.dates[idx], { day: 'numeric', month: 'long' }, lang)}</b> ({t.day} {idx})
-            <div>{t.measured}: <b>{fmtNum(demo.measured[idx], 1, lang)} %</b></div>
-            <div>model: <b>{fmtNum(demo.model[idx], 1, lang)} %</b></div>
-            <div>{t.persistence}: <b>{fmtNum(demo.persistence, 1, lang)} %</b></div>
+            <div>{t.measured}: <b>≈{fmtNum(demo.measured[idx], 0, lang)} %</b></div>
+            <div>model: <b>≈{fmtNum(demo.model[idx], 0, lang)} %</b></div>
+            <div>{t.persistence}: <b>≈{fmtNum(demo.persistence, 0, lang)} %</b></div>
           </div>
         )}
       </div>

@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { STATUS_META } from '../lib/calibration'
-import { timeAgo, fmtPct, fmtTemp } from '../lib/format'
+import { STATUS_META, isAlertStatus } from '../lib/calibration'
+import { trendText } from '../lib/droughtStatus'
+import { timeAgo, fmtWater, fmtTemp } from '../lib/format'
 
 function markerIcon(sensor) {
-  const pct = sensor.latest?.humidity
+  const pct = sensor.latest?.waterContent
   const label = pct == null ? '?' : `${Math.round(pct)}%`
-  const alert = sensor.status === 'critical' ? '<span class="marker-alert">⚠️</span>' : ''
+  const alert = isAlertStatus(sensor.status) ? '<span class="marker-alert">⚠️</span>' : ''
   return L.divIcon({
     className: 'marker-wrap',
     html: `<div style="position:relative"><div class="marker-pin status-${sensor.status}"><span>${label}</span></div>${alert}</div>`,
@@ -59,15 +60,13 @@ export default function SensorMap({ sensors, onSelect }) {
           <Marker key={s.nodeId} position={[s.gps.lat, s.gps.lng]} icon={markerIcon(s)}>
             <Popup>
               <div className="min-w-44 space-y-1.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-semibold">Sensor {s.nodeId}</span>
-                  <span className="text-xs font-medium" style={{ color: meta.color }}>
-                    {s.status === 'critical' ? '⚠️ ' : ''}{meta.label}
-                  </span>
+                <span className="font-semibold">Sensor {s.nodeId}</span>
+                <div className="text-2xl font-bold text-stone-800">{fmtWater(s.latest?.waterContent)}</div>
+                <div className="text-[11px] text-stone-400">est. volumetric water content</div>
+                <div className="text-xs font-semibold" style={{ color: meta.color }}>
+                  {isAlertStatus(s.status) ? '⚠️ ' : ''}{meta.label}
                 </div>
-                <div className="text-2xl font-bold text-stone-800">
-                  {fmtPct(s.latest?.humidity)}
-                </div>
+                {s.status !== 'stale' && <div className="text-xs text-stone-600">{trendText(s.trend)}</div>}
                 <div className="text-xs text-stone-500">
                   Temperature: {fmtTemp(s.latest?.temperature)}
                   <br />

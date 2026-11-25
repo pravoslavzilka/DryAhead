@@ -104,7 +104,7 @@ function StatCard({ value, sub, children, sources = [] }) {
 
 export default function App() {
   const f = snapshot.findings
-  const s7 = snapshot.scores_7d_pp
+  const s7 = snapshot.scores_7d_counts
   const storm = f.storm_0715
   const dry = f.dry_spell_0724_0816
   const dryDrops = Object.values(dry.change_pp).filter((v) => v != null).map((v) => Math.abs(v))
@@ -127,8 +127,8 @@ export default function App() {
               <p>
                 DryAhead is a network of low-cost soil-moisture sensors running on a family plot near Zvolen in
                 central Slovakia. Each node measures moisture right at the roots every 20 minutes and sends it by
-                long-range radio to a live dashboard. A model fed by local weather predicts when each spot will
-                reach plant stress. Everything, from the circuit boards to the forecast, is designed, built and
+                long-range radio to a live dashboard. For three of the spots, a model fed by local weather estimates when
+                they will reach plant stress. Everything, from the circuit boards to the forecast, is designed, built and
                 programmed by one person.
               </p>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 20 }}>
@@ -251,7 +251,7 @@ export default function App() {
             <Reveal style={{ marginTop: 20 }}><LiveWidget snapshot={snapshot} /></Reveal>
 
             <Reveal className="card" style={{ marginTop: 20 }}>
-              <h3>Soil moisture at four spots on the land</h3>
+              <h3>Estimated soil water content at four spots on the land</h3>
               <DataChart snapshot={snapshot} />
             </Reveal>
 
@@ -261,18 +261,18 @@ export default function App() {
                 <ul className="clean">
                   <li>
                     <b>Same rain, completely different response.</b> After the storm of {d('2026-07-15', { day: 'numeric', month: 'long' })}{' '}
-                    ({storm.rain_mm} mm), moisture rose within a day by {pp(storm.change_pp['3'])} points at node 3,{' '}
+                    ({storm.rain_mm} mm), estimated water content rose within a day by {pp(storm.change_pp['3'])} points at node 3,{' '}
                     {pp(storm.change_pp['4'])} at node 4, {pp(storm.change_pp['5'])} at node 5 and only{' '}
-                    {pp(storm.change_pp['1'])} at node 1. Every spot needs water differently.
+                    {pp(storm.change_pp['1'])} at node 1. Spots can differ a lot, though sensors and installation may account for part of it.
                   </li>
                   <li>
-                    <b>A good soaking lasts for weeks.</b> At node 4 that storm took moisture from{' '}
+                    <b>A good soaking lasts for weeks.</b> At node 4 that storm took the estimate from about{' '}
                     {pp(f.node4_after_storm.before)} % to {pp(f.node4_after_storm.day_after)} %, and 35 days later it
-                    was still {pp(f.node4_after_storm.after_35_days)} %.
+                    was still about {pp(f.node4_after_storm.after_35_days)} %.
                   </li>
                   <li>
                     <b>Light rain never reaches the roots.</b> None of six 1–3 mm rains raised moisture at nodes 4 and
-                    5. Over {dry.days} days without rain (24 July – 16 August), moisture fell by{' '}
+                    5. Over {dry.days} days without rain (24 July – 16 August), the estimate fell by{' '}
                     {Math.round(Math.min(...dryDrops))} to {Math.round(Math.max(...dryDrops))} points.
                   </li>
                 </ul>
@@ -317,8 +317,8 @@ export default function App() {
               <div className="eyebrow">The forecast</div>
               <h2>When will the soil reach plant stress?</h2>
               <p>
-                For nodes 1, 4 and 5 the live dashboard shows how many days remain until the soil gets so dry that
-                plants struggle to draw water if no rain falls, plus a second line that includes the rain in the
+                For nodes 1, 4 and 5 the live dashboard estimates how many days remain until the soil gets so dry that
+                plants struggle to draw water if no rain falls (a model estimate, not yet checked against plants), plus a second line that includes the rain in the
                 16-day weather forecast. Both run in the browser from two small physically-based models, fitted for
                 each node separately:
               </p>
@@ -349,7 +349,8 @@ export default function App() {
                 </div>
                 <p className="small" style={{ marginTop: 8 }}>
                   The model started from a single measurement ({d(snapshot.forecast_demo.dates[0], { day: 'numeric', month: 'long' })},
-                  node {snapshot.forecast_demo.node}) and forecast the following days, none of which it saw while learning.
+                  node {snapshot.forecast_demo.node}) and forecast the following days, none of which it saw while learning. These values lie in the interpolated,
+                  unmeasured part of the water-content scale.
                 </p>
                 <ForecastChart demo={snapshot.forecast_demo} />
               </Reveal>
@@ -358,8 +359,8 @@ export default function App() {
                 <div className="table-scroll">
                   <table>
                     <caption className="small muted" style={{ captionSide: 'bottom', textAlign: 'left', paddingTop: 6 }}>
-                      Average error 7 days ahead, in moisture percentage points (lower is better), on days the model
-                      never saw. 7-day forecasts per node: {Object.values(s7).map((v) => v.n).join(', ')}.
+                      Average error 7 days ahead, in raw sensor counts (lower is better), on days the model never saw.
+                      Counts aren’t comparable between soils or sensors. 7-day forecasts per node: {Object.values(s7).map((v) => v.n).join(', ')}.
                     </caption>
                     <thead><tr><th>Node</th><th className="num">Model</th><th className="num">“Stays the same”</th><th className="num">Average trend</th></tr></thead>
                     <tbody>
@@ -440,8 +441,8 @@ export default function App() {
                 <p style={{ margin: 0 }}>Battery voltage, reset reason and sensor health in every message, so a draining battery or a failing clock shows up in days, not after the node goes silent.</p>
               </Reveal>
               <Reveal className="card">
-                <h3>Calibrated moisture</h3>
-                <p style={{ margin: 0 }}>Readings are a relative signal today. Calibrating against oven-dried soil samples per soil type will turn them into true volumetric moisture.</p>
+                <h3>Better water-content calibration</h3>
+                <p style={{ margin: 0 }}>The percentages are a provisional estimate from one bench run, starting from oven-dried soil. Next: repeat it, measure wetter soil, use soil from each spot and check the result on the field nodes.</p>
               </Reveal>
               <Reveal className="card">
                 <h3>A second site</h3>
